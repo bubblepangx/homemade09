@@ -65,12 +65,13 @@ button {
   justify-content: center;
 }
 
-#magnetBtn {
+#fireBtn {
   flex: 1;
   height: 110px;
-  background: #7c4dff;
+  background: #e53935;
   color: white;
-  font-size: 16px;
+  font-size: 36px;
   width: auto;
   border-radius: 12px;
+  border: 3px solid #b71c1c;
 }
