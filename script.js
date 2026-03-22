@@ -12,6 +12,62 @@ const IMG = {};
 });
 function spr(name,x,y,w,h){ if(IMG[name]?.complete) ctx.drawImage(IMG[name],x,y,w,h); }
 
+function drawFlowerStage(x,y,w,h,st){
+  // 스테이지별 색상
+  let petalA, petalB, innerA, innerB, coreC;
+  if(st<=3){
+    petalA='#ff8c00'; petalB='#ffb300';   // 주황→노랑
+    innerA='#ffd740'; innerB='#ffe57f';
+    coreC ='#fff176';
+  } else if(st<=7){
+    petalA='#b39ddb'; petalB='#ce93d8';   // 연보라→라벤더
+    innerA='#f5f0e8'; innerB='#fffde7';   // 아이보리
+    coreC ='#f0ebe0';
+  } else {
+    petalA='#66bb6a'; petalB='#a5d6a7';   // 초록→연초록
+    innerA='#e8f5e9'; innerB='#ffffff';   // 흰색
+    coreC ='#f1f8e9';
+  }
+
+  const cx=x+w/2, cy=y+h/2;
+  ctx.save(); ctx.translate(cx,cy);
+
+  // 꽃잎 8장 (그라디언트)
+  const petals=8;
+  for(let i=0;i<petals;i++){
+    ctx.save(); ctx.rotate((Math.PI*2/petals)*i);
+    const pg=ctx.createLinearGradient(0,-h*0.1,0,-h*0.46);
+    pg.addColorStop(0, petalB);
+    pg.addColorStop(1, petalA);
+    ctx.fillStyle=pg;
+    ctx.beginPath();
+    ctx.ellipse(0,-h*0.3, w*0.11, h*0.2, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // 안쪽 흰/아이보리 원
+  const ig=ctx.createRadialGradient(0,0,0,0,0,w*0.2);
+  ig.addColorStop(0, innerB);
+  ig.addColorStop(1, innerA);
+  ctx.fillStyle=ig;
+  ctx.beginPath(); ctx.arc(0,0,w*0.2,0,Math.PI*2); ctx.fill();
+
+  // 중심 코어 (그라디언트)
+  const cg=ctx.createRadialGradient(-w*0.04,-w*0.04,0,0,0,w*0.1);
+  cg.addColorStop(0,'rgba(255,255,255,0.9)');
+  cg.addColorStop(1, coreC);
+  ctx.fillStyle=cg;
+  ctx.beginPath(); ctx.arc(0,0,w*0.1,0,Math.PI*2); ctx.fill();
+
+  // 선 (진하게)
+  const lineColor = st<=3?'#e65100': st<=7?'#6a1b9a':'#2e7d32';
+  ctx.strokeStyle=lineColor; ctx.lineWidth=1.2;
+  ctx.beginPath(); ctx.arc(0,0,w*0.2,0,Math.PI*2); ctx.stroke();
+
+  ctx.restore();
+}
+
 // ========================
 //   WEB AUDIO (음악 + SFX)
 // ========================
@@ -927,7 +983,7 @@ function loop(){
 
     // 아이템 (-10%)
     coinItems.forEach(c=>spr('clock',   c.x,c.y,43,43));
-    flowers.forEach(f  =>spr('flower',  f.x,f.y,47,47));
+    flowers.forEach(f  =>drawFlowerStage(f.x,f.y,47,47,stage));
     boxes.forEach(b    =>spr('flag',    b.x,b.y,47,47));
     magnets.forEach(m  =>spr('magnet',  m.x,m.y,47,47));
 
