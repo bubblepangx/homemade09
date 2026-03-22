@@ -1034,7 +1034,8 @@ window.addEventListener('keyup',e=>{ keys[e.key]=false; });
 canvas.addEventListener('touchstart',e=>{
   e.preventDefault();
   initAudio();
-  if(gameState!=='playing'){resetGame();return;}
+  if(gameState==='title'||gameState==='gameover'){resetGame();return;}
+  if(gameState!=='playing') return;
   touchX=e.touches[0].clientX-canvas.getBoundingClientRect().left;
   touchActive=true;
 },{passive:false});
