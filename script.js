@@ -436,12 +436,12 @@ function drawBox(x, y, w, h) {
 //   게임 상태
 // ========================
 let gameState = 'title';
-let score=0, coins=0, stage=1, avoids=0, lives=3;
+let score=0, coins=0, stage=1, avoids=0, lives=7;
 let highScore = parseInt(localStorage.getItem('psdHigh')||'0');
 let totalCoins = parseInt(localStorage.getItem('psdCoins')||'0');
 let invincible=0; // 피격 후 무적 프레임
 
-const PW=72, PH=90; // 플레이어 크기 (크게)
+const PW=65, PH=81; // 플레이어 크기 (-10%)
 const player = {
   x:164, y:440, width:PW, height:PH,
   speed:5, shield:false, shieldTimer:0
@@ -461,10 +461,13 @@ for(let i=0;i<10;i++) bgClouds.push({
 //   게임 로직
 // ========================
 function spawnRate() {
-  // 스테이지별 스폰 속도 (천천히 시작)
-  return Math.min(0.008 + stage*0.003, 0.04);
+  if(stage<=3) return 0.004 + stage*0.0015; // 1~3단계: 매우 천천히
+  return Math.min(0.01 + (stage-3)*0.004, 0.04);
 }
-function enemySpeed() { return 1.5 + stage*0.35; }
+function enemySpeed() {
+  if(stage<=3) return 1.0 + stage*0.2;      // 1~3단계: 느리게
+  return 1.8 + (stage-3)*0.4;
+}
 
 function updateGame() {
   let dx=0,dy=0;
@@ -499,14 +502,15 @@ function updateGame() {
     });
   }
   // 번개: 스테이지 3+
-  if(stage>=3 && Math.random()<0.006+stage*0.001) {
+  if(stage>=4 && Math.random()<0.005+(stage-3)*0.001) {
     lightnings.push({x:Math.random()*(canvas.width-44),y:-80,speed:4+stage*0.6});
   }
   // 아이템들
-  if(Math.random()<0.009) coinItems.push({x:Math.random()*(canvas.width-36),y:-36,speed:1.8+stage*0.15});
-  if(Math.random()<0.006) flowers.push({x:Math.random()*(canvas.width-40),y:-40,speed:1.6});
-  if(Math.random()<0.004) boxes.push({x:Math.random()*(canvas.width-40),y:-40,speed:1.5});
-  if(Math.random()<0.003) magnets.push({x:Math.random()*(canvas.width-40),y:-40,speed:1.5});
+  const ir = stage<=3 ? 0.5 : 1.0; // 초반 아이템도 적게
+  if(Math.random()<0.008*ir) coinItems.push({x:Math.random()*(canvas.width-36),y:-36,speed:1.5+stage*0.12});
+  if(Math.random()<0.005*ir) flowers.push({x:Math.random()*(canvas.width-40),y:-40,speed:1.4});
+  if(Math.random()<0.003*ir) boxes.push({x:Math.random()*(canvas.width-40),y:-40,speed:1.3});
+  if(Math.random()<0.002*ir) magnets.push({x:Math.random()*(canvas.width-40),y:-40,speed:1.3});
 
   // 자석 효과: 아이템 끌어당기기
   if(magnetActive) {
@@ -594,8 +598,9 @@ function hit(p,x,y,w,h){
 function takeDamage(){
   lives--;
   sfxHit();
-  invincible=90; // 1.5초 무적
+  invincible=120; // 2초 무적 (제자리 부활)
   if(lives<=0) triggerGameOver();
+  // 위치 유지 - 제자리 부활
 }
 
 function triggerGameOver(){
@@ -609,7 +614,7 @@ function resetObjects(){
   enemies=[];birds=[];lightnings=[];coinItems=[];flowers=[];boxes=[];magnets=[];
 }
 function resetGame(){
-  score=0;coins=0;stage=1;avoids=0;lives=3;invincible=0;
+  score=0;coins=0;stage=1;avoids=0;lives=7;invincible=0;
   player.x=164;player.y=440;player.shield=false;player.shieldTimer=0;
   magnetActive=false;magnetTimer=0;
   resetObjects(); gameState='playing'; startMusic(1);
@@ -640,8 +645,8 @@ function drawHUD(){
   ctx.fillText(`ST:${stage}`,168,15);
   ctx.fillText(`AVD:${avoids}/30`,228,15);
   // 목숨 하트
-  ctx.font='15px sans-serif';
-  ctx.fillText('❤️'.repeat(lives)+'🖤'.repeat(Math.max(0,3-lives)),280,15);
+  ctx.font='12px sans-serif';
+  ctx.fillText('❤️'.repeat(lives)+'🖤'.repeat(Math.max(0,7-lives)),210,15);
   // 아이템 상태
   if(player.shield){ctx.fillStyle='#00e5ff';ctx.font='bold 12px Courier New';ctx.fillText('🛡SHIELD',6,33);}
   if(magnetActive){ctx.fillStyle='#e040fb';ctx.font='bold 12px Courier New';ctx.fillText(`🧲${Math.ceil(magnetTimer/60)}s`,108,33);}
@@ -733,26 +738,26 @@ function loop(){
       ctx.restore();
     }
 
-    // 아이템
-    coinItems.forEach(c=>spr('clock',   c.x,c.y,48,48));
-    flowers.forEach(f  =>spr('flower',  f.x,f.y,52,52));
-    boxes.forEach(b    =>spr('flag',    b.x,b.y,52,52));
-    magnets.forEach(m  =>spr('magnet',  m.x,m.y,52,52));
+    // 아이템 (-10%)
+    coinItems.forEach(c=>spr('clock',   c.x,c.y,43,43));
+    flowers.forEach(f  =>spr('flower',  f.x,f.y,47,47));
+    boxes.forEach(b    =>spr('flag',    b.x,b.y,47,47));
+    magnets.forEach(m  =>spr('magnet',  m.x,m.y,47,47));
 
-    // 적
+    // 적 (-10%)
     enemies.forEach(e=>{
       ctx.save();
-      if(e.dir===-1){ctx.translate(e.x+72,0);ctx.scale(-1,1);ctx.translate(-e.x,0);}
-      spr('airplane',e.x,e.y,72,72);
+      if(e.dir===-1){ctx.translate(e.x+65,0);ctx.scale(-1,1);ctx.translate(-e.x,0);}
+      spr('airplane',e.x,e.y,65,65);
       ctx.restore();
     });
     birds.forEach(b=>{
       ctx.save();
-      if(b.dir===-1){ctx.translate(b.x+64,0);ctx.scale(-1,1);ctx.translate(-b.x,0);}
-      spr('creature',b.x,b.y,64,50);
+      if(b.dir===-1){ctx.translate(b.x+58,0);ctx.scale(-1,1);ctx.translate(-b.x,0);}
+      spr('creature',b.x,b.y,58,45);
       ctx.restore();
     });
-    lightnings.forEach(l=>spr('lightning',l.x,l.y,44,80));
+    lightnings.forEach(l=>spr('lightning',l.x,l.y,40,72));
 
     // 플레이어 (피격 무적 중 깜박임)
     if(invincible===0 || Math.floor(invincible/6)%2===0)
