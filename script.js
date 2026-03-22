@@ -4,6 +4,15 @@ const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 
 // ========================
+//   스프라이트 로드
+// ========================
+const IMG = {};
+['airplane','character','clock','cloud','creature','flag','flower','lightning','magnet'].forEach(n=>{
+  const i=new Image(); i.src=`sprites/${n}.png`; IMG[n]=i;
+});
+function spr(name,x,y,w,h){ if(IMG[name]?.complete) ctx.drawImage(IMG[name],x,y,w,h); }
+
+// ========================
 //   WEB AUDIO (음악 + SFX)
 // ========================
 let audioCtx = null;
@@ -725,19 +734,29 @@ function loop(){
     }
 
     // 아이템
-    coinItems.forEach(c=>drawClock(c.x,c.y,40,40));
-    flowers.forEach(f=>drawFlower(f.x,f.y,44,44));
-    boxes.forEach(b=>drawBox(b.x,b.y,44,44));
-    magnets.forEach(m=>drawMagnet(m.x,m.y,44,44));
+    coinItems.forEach(c=>spr('clock',   c.x,c.y,48,48));
+    flowers.forEach(f  =>spr('flower',  f.x,f.y,52,52));
+    boxes.forEach(b    =>spr('flag',    b.x,b.y,52,52));
+    magnets.forEach(m  =>spr('magnet',  m.x,m.y,52,52));
 
     // 적
-    enemies.forEach(e=>drawEnemyPlane(e.x,e.y,60,72,e.dir));
-    birds.forEach(b=>drawBird(b.x,b.y,56,44));
-    lightnings.forEach(l=>drawLightning(l.x,l.y,36,72));
+    enemies.forEach(e=>{
+      ctx.save();
+      if(e.dir===-1){ctx.translate(e.x+72,0);ctx.scale(-1,1);ctx.translate(-e.x,0);}
+      spr('airplane',e.x,e.y,72,72);
+      ctx.restore();
+    });
+    birds.forEach(b=>{
+      ctx.save();
+      if(b.dir===-1){ctx.translate(b.x+64,0);ctx.scale(-1,1);ctx.translate(-b.x,0);}
+      spr('creature',b.x,b.y,64,50);
+      ctx.restore();
+    });
+    lightnings.forEach(l=>spr('lightning',l.x,l.y,44,80));
 
     // 플레이어 (피격 무적 중 깜박임)
     if(invincible===0 || Math.floor(invincible/6)%2===0)
-      drawPlayer(player.x,player.y,PW,PH);
+      spr('character',player.x,player.y,PW,PH);
     if(player.shield){
       ctx.strokeStyle='rgba(0,229,255,0.8)'; ctx.lineWidth=3;
       ctx.shadowColor='#00e5ff'; ctx.shadowBlur=15;

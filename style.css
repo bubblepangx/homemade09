@@ -29,30 +29,35 @@ body {
 
 .dpad {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 6px;
-  width: 180px;
+  grid-template-columns: repeat(3, 64px);
+  grid-template-rows: repeat(3, 64px);
+  gap: 4px;
 }
 
 .center-dot {
-  background: #333;
+  background: #444;
   border-radius: 50%;
-  width: 100%;
-  aspect-ratio: 1;
+  width: 64px;
+  height: 64px;
 }
 
 button {
   font-size: 26px;
-  padding: 14px 10px;
+  width: 64px;
+  height: 64px;
+  padding: 0;
   background: #ffeb3b;
   color: #000;
   border: 3px solid #000;
-  border-radius: 8px;
+  border-radius: 10px;
   font-weight: bold;
   touch-action: manipulation;
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 #magnetBtn {
