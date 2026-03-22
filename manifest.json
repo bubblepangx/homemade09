@@ -1,0 +1,22 @@
+{
+  "name": "도연이의 비행기 게임 2026",
+  "short_name": "도연이 비행기",
+  "description": "도연이의 레트로 비행기 슈팅 게임",
+  "start_url": "/homemade09/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#111111",
+  "theme_color": "#111111",
+  "icons": [
+    {
+      "src": "assets/og-image.jpg",
+      "sizes": "1200x630",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "assets/splash-phone.jpg",
+      "sizes": "390x844",
+      "type": "image/jpeg"
+    }
+  ]
+}
