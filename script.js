@@ -671,97 +671,115 @@ function drawBgCloud(c){
 // ========================
 //   UI 그리기
 // ========================
+function C(){ ctx.textAlign='center'; } // 편의 헬퍼
+
 function drawHUD(){
+  ctx.textAlign='left';
   ctx.fillStyle='rgba(0,0,0,0.55)';
   ctx.fillRect(0,0,canvas.width,42);
   ctx.fillStyle='#fff'; ctx.font='bold 13px Courier New';
   ctx.fillText(`SCORE:${score}`,6,15);
-  ctx.fillText(`ST:${stage}`,6,33);
-  // 목숨 하트
-  ctx.font='13px sans-serif';
-  ctx.fillText('❤️'.repeat(lives)+'🖤'.repeat(Math.max(0,7-lives)),50,15);
-  // 스테이지 타이머
+  ctx.fillText(`ST:${stage}/10`,6,33);
+  ctx.font='12px sans-serif';
+  ctx.fillText('❤️'.repeat(lives)+'🖤'.repeat(Math.max(0,7-lives)),60,16);
   const tl=Math.max(40*60,STAGE_LIMIT-(stage-1)*5*60);
   const remain=Math.max(0,Math.ceil((tl-stageTimer)/60));
-  ctx.fillStyle= remain<=10?'#ff5252':'#fff';
+  ctx.fillStyle=remain<=10?'#ff5252':'#fff';
   ctx.font='bold 13px Courier New';
   ctx.fillText(`⏱${remain}s`,310,15);
-  ctx.fillText(`AVD:${avoids}`,310,33);
+  ctx.fillText(`AVD:${avoids}/30`,300,33);
   if(player.shield){ctx.fillStyle='#00e5ff';ctx.fillText('🛡',280,15);}
-  ctx.fillStyle='#ffd54f';ctx.fillText(`💰${coins}`,260,33);
+  ctx.fillStyle='#ffd54f'; ctx.fillText(`💰${coins}`,260,33);
 }
 
 function drawTitle(){
-  ctx.fillStyle='rgba(0,0,0,0.62)'; ctx.fillRect(14,50,372,490);
-  ctx.strokeStyle='#ffd54f'; ctx.lineWidth=3; ctx.strokeRect(14,50,372,490);
+  ctx.fillStyle='rgba(0,0,10,0.68)'; ctx.fillRect(14,44,372,510);
+  ctx.strokeStyle='#ffd54f'; ctx.lineWidth=3; ctx.strokeRect(14,44,372,510);
 
-  // 게임 제목 - 귀엽게
-  ctx.save();
-  ctx.shadowColor='#ffd54f'; ctx.shadowBlur=16;
-  ctx.fillStyle='#fff9c4'; ctx.font='bold 18px sans-serif';
-  ctx.textAlign='center';
-  ctx.fillText('✈️  도연이의 비행기 게임  ✈️', 200, 90);
-  ctx.fillStyle='#ffd54f'; ctx.font='bold 22px sans-serif';
-  ctx.fillText('2 0 2 6', 200, 118);
-  ctx.shadowBlur=0; ctx.restore();
+  ctx.save(); ctx.textAlign='center';
+  // 제목
+  ctx.shadowColor='#ffd54f'; ctx.shadowBlur=18;
+  ctx.fillStyle='#fff9c4'; ctx.font='bold 19px sans-serif';
+  ctx.fillText('✈️  도연이의 비행기 게임  ✈️', 200, 82);
+  ctx.fillStyle='#ffd54f'; ctx.font='bold 24px sans-serif';
+  ctx.fillText('2 0 2 6', 200, 110);
+  ctx.shadowBlur=0;
 
-  // 비행기 스프라이트
-  spr('character', 200-PW/2, 128, PW, PH);
+  spr('character', 200-PW/2, 118, PW, PH);
 
-  ctx.fillStyle='#fff'; ctx.font='13px sans-serif'; ctx.textAlign='left';
-  const lines=[
-    '❤️ 목숨 7개',
-    '✈️ 적기 · ⚡번개 → 목숨 -1',
-    '🐦 새에 맞으면 → 점수 -10',
-    '⏰+10  🌸+30  피하면 +5',
-    '📦방패  🔥미사일로 적 격추 +80',
-    '시간 초과 or 30기 격파 → 다음 스테이지',
+  // 아이템 설명 박스
+  ctx.fillStyle='rgba(255,255,255,0.08)';
+  ctx.fillRect(24,210,352,185);
+  ctx.strokeStyle='rgba(255,255,255,0.2)'; ctx.lineWidth=1;
+  ctx.strokeRect(24,210,352,185);
+
+  ctx.fillStyle='#ffd54f'; ctx.font='bold 13px sans-serif';
+  ctx.fillText('— 아이템 안내 —', 200, 230);
+
+  ctx.fillStyle='#fff'; ctx.font='13px sans-serif';
+  const items=[
+    ['⏰ 시계','먹으면 +10점'],
+    ['🌸 꽃','먹으면 +30점'],
+    ['📦 빨간상자','방패 8초 — 피격 1회 막기'],
+    ['🧲 자석','주변 코인 자동 흡수 6초'],
+    ['🔥 발사버튼','미사일 발사 → 적 격추 +80'],
   ];
-  lines.forEach((l,i)=>ctx.fillText(l,30,240+i*26));
+  items.forEach(([icon,desc],i)=>{
+    ctx.textAlign='left';  ctx.fillStyle='#ffe082'; ctx.fillText(icon, 36, 252+i*27);
+    ctx.fillStyle='#eee';  ctx.fillText(desc, 140, 252+i*27);
+  });
 
   ctx.textAlign='center';
-  ctx.fillStyle='#69f0ae'; ctx.font='bold 17px sans-serif';
-  ctx.fillText('▶  화면 터치로 시작  ◀', 200, 408);
+  ctx.fillStyle='#69f0ae'; ctx.font='bold 16px sans-serif';
+  ctx.fillText('▶  화면 터치 / 스페이스로 시작  ◀', 200, 418);
   ctx.fillStyle='#aaa'; ctx.font='12px sans-serif';
-  ctx.fillText(`최고: ${highScore}    총 코인: ${totalCoins}`, 200, 432);
+  ctx.fillText(`최고: ${highScore}    총 코인: ${totalCoins}`, 200, 442);
+  ctx.fillText('❤️ 목숨 7개 · 적기·번개 피하기 · 총 10스테이지', 200, 462);
+  ctx.restore();
 }
 
 function drawGameOver(){
-  ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.fillStyle='#ef5350'; ctx.font='bold 44px Courier New'; ctx.fillText('GAME OVER',44,180);
-  ctx.fillStyle='#fff'; ctx.font='22px Courier New';
-  ctx.fillText(`SCORE:  ${score}`,110,255);
-  ctx.fillText(`BEST:   ${highScore}`,110,290);
-  ctx.fillText(`COINS:  ${totalCoins}`,110,325);
-  ctx.fillStyle='#69f0ae'; ctx.font='18px Courier New';
-  ctx.fillText('터치하면 다시 시작',92,415);
+  ctx.fillStyle='rgba(0,0,0,0.72)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.save(); ctx.textAlign='center';
+  ctx.fillStyle='#ef5350'; ctx.font='bold 46px sans-serif';
+  ctx.fillText('GAME OVER', 200, 190);
+  ctx.fillStyle='#fff'; ctx.font='22px sans-serif';
+  ctx.fillText(`SCORE:  ${score}`, 200, 258);
+  ctx.fillText(`BEST:   ${highScore}`, 200, 292);
+  ctx.fillText(`💰 총 코인: ${totalCoins}`, 200, 326);
+  ctx.fillStyle='#69f0ae'; ctx.font='18px sans-serif';
+  ctx.fillText('터치하면 다시 시작', 200, 420);
+  ctx.restore();
 }
 
 function drawStageClear(){
   ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.fillStyle='#69f0ae'; ctx.font='bold 34px Courier New';
-  ctx.fillText(`STAGE ${stage} CLEAR!`,52,230);
-  ctx.fillStyle='#fff'; ctx.font='22px Courier New';
-  ctx.fillText(`+${500*stage} 보너스!`,110,290);
-  ctx.fillText('다음 스테이지 준비...',56,380);
+  ctx.save(); ctx.textAlign='center';
+  ctx.fillStyle='#69f0ae'; ctx.font='bold 36px sans-serif';
+  const name=THEMES[Math.min(stage,THEMES.length-1)]?.name||'';
+  ctx.fillText(`STAGE ${stage} CLEAR!`, 200, 220);
+  ctx.fillStyle='#ffd54f'; ctx.font='18px sans-serif';
+  ctx.fillText(`다음: ${name}`, 200, 258);
+  ctx.fillStyle='#fff'; ctx.font='22px sans-serif';
+  ctx.fillText(`보너스 +${500*stage}점`, 200, 300);
+  ctx.fillText('다음 스테이지 준비 중...', 200, 380);
+  ctx.restore();
 }
 
 // ========================
 //   메인 루프
 // ========================
 const THEMES = [
-  // 1: 흐린날 (회색구름)
-  { sky:['#78909c','#b0bec5'], cloud:'rgba(200,210,215,0.6)', cloudDark:true },
-  // 2: 비오는날 (어두운 블루그레이)
-  { sky:['#455a64','#607d8b'], cloud:'rgba(100,120,130,0.5)', rain:true },
-  // 3: 쨍쨍한날 (밝은 파랑)
-  { sky:['#1976d2','#64b5f6'], cloud:'rgba(255,255,255,0.75)', sunny:true },
-  // 4: 노을 (오렌지/핑크)
-  { sky:['#bf360c','#ff8a65'], cloud:'rgba(255,160,100,0.5)', sunset:true },
-  // 5: 추운날/얼음 (아이시블루)
-  { sky:['#80d8ff','#e1f5fe'], cloud:'rgba(220,245,255,0.7)', ice:true },
-  // 6: 우주 (다크+별)
-  { sky:['#000010','#0d0d2b'], cloud:null, space:true },
+  { name:'맑은 하늘',    sky:['#1976d2','#64b5f6'], cloud:'rgba(255,255,255,0.8)',        sunny:true },
+  { name:'흐린 날',      sky:['#78909c','#b0bec5'], cloud:'rgba(190,200,210,0.7)',        cloudy:true },
+  { name:'핑크 노을',    sky:['#ad1457','#f48fb1'], cloud:'rgba(255,180,210,0.65)',       pink:true },
+  { name:'연보라 구름',  sky:['#6a1b9a','#ce93d8'], cloud:'rgba(210,170,255,0.7)',        purple:true },
+  { name:'구름 속',      sky:['#e0e0e0','#f5f5f5'], cloud:'rgba(255,255,255,0.92)',       insideCloud:true },
+  { name:'비 오는 날',   sky:['#37474f','#607d8b'], cloud:'rgba(90,110,125,0.6)',         rain:true },
+  { name:'노을',         sky:['#bf360c','#ff8a65'], cloud:'rgba(255,150,80,0.55)',        sunset:true },
+  { name:'바닷속',       sky:['#006064','#00acc1'], cloud:'rgba(0,180,200,0.3)',          underwater:true },
+  { name:'우주',         sky:['#000010','#0d0d2b'], cloud:null,                           space:true },
+  { name:'맑은 날 🎉',  sky:['#29b6f6','#81d4fa'], cloud:'rgba(255,255,255,0.85)',       sunny:true, final:true },
 ];
 
 function drawBackground(){
@@ -799,44 +817,90 @@ function drawBackground(){
   }
 
   // 얼음: 눈송이
-  if(t.ice){
-    ctx.fillStyle='rgba(200,240,255,0.6)';
-    for(let i=0;i<20;i++){
-      const sx=((i*113+now*0.05)%canvas.width);
-      const sy=((i*79+now*0.08)%canvas.height);
+  // 핑크: 반짝이 하트
+  if(t.pink){
+    ctx.fillStyle='rgba(255,150,180,0.25)';
+    for(let i=0;i<12;i++){
+      const sx=((i*131+now*0.04)%canvas.width);
+      const sy=((i*89+now*0.06)%canvas.height);
+      ctx.font='14px sans-serif'; ctx.fillText('✨',sx,sy);
+    }
+  }
+
+  // 연보라: 반짝별
+  if(t.purple){
+    for(let i=0;i<18;i++){
+      const sx=((i*107+now*0.03)%canvas.width);
+      const sy=((i*83+now*0.05)%canvas.height);
+      const a=0.4+0.4*Math.sin(now*0.002+i);
+      ctx.fillStyle=`rgba(220,180,255,${a})`;
       ctx.beginPath(); ctx.arc(sx,sy,2,0,Math.PI*2); ctx.fill();
     }
   }
 
+  // 구름속: 전체 안개
+  if(t.insideCloud){
+    ctx.fillStyle='rgba(255,255,255,0.35)';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+
   // 노을: 태양
   if(t.sunset){
-    const sg=ctx.createRadialGradient(200,canvas.height*0.3,0,200,canvas.height*0.3,120);
-    sg.addColorStop(0,'rgba(255,230,100,0.35)');
-    sg.addColorStop(1,'rgba(255,100,50,0)');
+    const sg=ctx.createRadialGradient(200,canvas.height*0.3,0,200,canvas.height*0.3,130);
+    sg.addColorStop(0,'rgba(255,220,80,0.4)');
+    sg.addColorStop(1,'rgba(255,80,30,0)');
     ctx.fillStyle=sg; ctx.fillRect(0,0,canvas.width,canvas.height);
   }
 
-  // 쨍쨍: 태양 빛
+  // 맑은날: 태양빛
   if(t.sunny){
-    const sg=ctx.createRadialGradient(360,60,0,360,60,100);
-    sg.addColorStop(0,'rgba(255,255,200,0.4)');
-    sg.addColorStop(1,'rgba(255,255,200,0)');
+    const sg=ctx.createRadialGradient(350,55,0,350,55,110);
+    sg.addColorStop(0,'rgba(255,255,180,0.5)');
+    sg.addColorStop(1,'rgba(255,255,180,0)');
     ctx.fillStyle=sg; ctx.fillRect(0,0,canvas.width,canvas.height);
+    if(t.final){
+      // 마지막 스테이지: 무지개
+      const rg=ctx.createLinearGradient(0,200,canvas.width,200);
+      rg.addColorStop(0,'rgba(255,0,0,0.12)');
+      rg.addColorStop(0.17,'rgba(255,165,0,0.12)');
+      rg.addColorStop(0.34,'rgba(255,255,0,0.12)');
+      rg.addColorStop(0.5,'rgba(0,200,0,0.12)');
+      rg.addColorStop(0.67,'rgba(0,100,255,0.12)');
+      rg.addColorStop(0.84,'rgba(100,0,200,0.12)');
+      rg.addColorStop(1,'rgba(200,0,200,0.12)');
+      ctx.fillStyle=rg; ctx.fillRect(0,80,canvas.width,200);
+    }
+  }
+
+  // 바닷속: 물결 + 거품
+  if(t.underwater){
+    ctx.fillStyle='rgba(0,200,220,0.08)';
+    for(let i=0;i<5;i++){
+      const wy=(canvas.height/5*i)+Math.sin(now*0.001+i)*15;
+      ctx.fillRect(0,wy,canvas.width,30);
+    }
+    ctx.fillStyle='rgba(180,240,255,0.5)';
+    for(let i=0;i<20;i++){
+      const bx=((i*113+now*0.04)%canvas.width);
+      const by=((i*67+now*0.12)%canvas.height);
+      ctx.beginPath(); ctx.arc(bx,by,3+i%3,0,Math.PI*2); ctx.stroke();
+    }
   }
 
   // 구름
   if(t.cloud){
     bgClouds.forEach(c=>{
-      ctx.globalAlpha=0.85;
+      const sz = t.insideCloud ? 1.6 : 1.0; // 구름속은 더 크게
+      ctx.globalAlpha= t.insideCloud ? 0.95 : 0.82;
       ctx.fillStyle=t.cloud;
       ctx.beginPath();
-      ctx.arc(c.x+c.size*0.5,c.y,c.size*0.55,0,Math.PI*2);
-      ctx.arc(c.x+c.size*1.1,c.y-c.size*0.2,c.size*0.7,0,Math.PI*2);
-      ctx.arc(c.x+c.size*0.1,c.y+c.size*0.1,c.size*0.6,0,Math.PI*2);
+      ctx.arc(c.x+c.size*0.5*sz, c.y, c.size*0.55*sz, 0, Math.PI*2);
+      ctx.arc(c.x+c.size*1.1*sz, c.y-c.size*0.2*sz, c.size*0.7*sz, 0, Math.PI*2);
+      ctx.arc(c.x+c.size*0.1*sz, c.y+c.size*0.1*sz, c.size*0.6*sz, 0, Math.PI*2);
       ctx.fill();
       ctx.globalAlpha=1;
-      c.x-=c.speed*(t.rain?1.5:1);
-      if(c.x<-c.size*2.5) c.x=canvas.width+c.size*2;
+      c.x-=c.speed*(t.rain?1.6:1);
+      if(c.x<-c.size*3) c.x=canvas.width+c.size*2;
     });
   }
 }
