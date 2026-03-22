@@ -427,9 +427,10 @@ function drawBox(x, y, w, h) {
 //   게임 상태
 // ========================
 let gameState = 'title';
-let score=0, coins=0, stage=1, avoids=0;
+let score=0, coins=0, stage=1, avoids=0, lives=3;
 let highScore = parseInt(localStorage.getItem('psdHigh')||'0');
 let totalCoins = parseInt(localStorage.getItem('psdCoins')||'0');
+let invincible=0; // 피격 후 무적 프레임
 
 const PW=72, PH=90; // 플레이어 크기 (크게)
 const player = {
@@ -510,13 +511,15 @@ function updateGame() {
     });
   }
 
+  if(invincible>0) invincible--;
+
   // 적기 업데이트
   enemies = enemies.filter(e=>{
     e.y += e.speed; e.x += e.dx;
-    if(e.y>canvas.height+70){ avoids++; return false; }
-    if(hit(player,e.x,e.y,60,72)){
-      if(player.shield){player.shield=false;player.shieldTimer=0;score+=100;sfxHit();}
-      else triggerGameOver();
+    if(e.y>canvas.height+70){ avoids++; score+=5; return false; }
+    if(invincible===0 && hit(player,e.x,e.y,60,72)){
+      if(player.shield){player.shield=false;player.shieldTimer=0;sfxHit();}
+      else { takeDamage(); }
       return false;
     }
     return true;
@@ -526,14 +529,21 @@ function updateGame() {
   birds = birds.filter(b=>{
     b.x+=b.speed*b.dir;
     if(b.x<-80||b.x>canvas.width+80) return false;
-    if(hit(player,b.x,b.y,56,44)){score=Math.max(0,score-20);sfxHit();return false;}
+    if(invincible===0 && hit(player,b.x,b.y,56,44)){
+      score=Math.max(0,score-10); sfxHit(); invincible=40;
+      return false;
+    }
     return true;
   });
 
   // 번개
   lightnings = lightnings.filter(l=>{
     l.y+=l.speed;
-    if(hit(player,l.x,l.y,36,72)){triggerGameOver();return false;}
+    if(invincible===0 && hit(player,l.x,l.y,36,72)){
+      if(player.shield){player.shield=false;player.shieldTimer=0;sfxHit();}
+      else takeDamage();
+      return false;
+    }
     return l.y<canvas.height+90;
   });
 
@@ -572,6 +582,13 @@ function hit(p,x,y,w,h){
   return !(p.x+m+p.width-m*2<x||x+w<p.x+m||p.y+m+p.height-m*2<y||y+h<p.y+m);
 }
 
+function takeDamage(){
+  lives--;
+  sfxHit();
+  invincible=90; // 1.5초 무적
+  if(lives<=0) triggerGameOver();
+}
+
 function triggerGameOver(){
   gameState='gameover';
   if(score>highScore){highScore=score;localStorage.setItem('psdHigh',highScore);}
@@ -583,7 +600,7 @@ function resetObjects(){
   enemies=[];birds=[];lightnings=[];coinItems=[];flowers=[];boxes=[];magnets=[];
 }
 function resetGame(){
-  score=0;coins=0;stage=1;avoids=0;
+  score=0;coins=0;stage=1;avoids=0;lives=3;invincible=0;
   player.x=164;player.y=440;player.shield=false;player.shieldTimer=0;
   magnetActive=false;magnetTimer=0;
   resetObjects(); gameState='playing'; startMusic(1);
@@ -607,15 +624,20 @@ function drawBgCloud(c){
 //   UI 그리기
 // ========================
 function drawHUD(){
-  ctx.fillStyle='rgba(0,0,0,0.5)';
-  ctx.fillRect(0,0,canvas.width,40);
+  ctx.fillStyle='rgba(0,0,0,0.55)';
+  ctx.fillRect(0,0,canvas.width,42);
   ctx.fillStyle='#fff'; ctx.font='bold 13px Courier New';
-  ctx.fillText(`SCORE:${score}`,6,14);
-  ctx.fillText(`ST:${stage}`,160,14);
-  ctx.fillText(`AVD:${avoids}/30`,224,14);
-  ctx.fillText(`💰${coins}`,334,14);
-  if(player.shield){ctx.fillStyle='#00e5ff';ctx.fillText('🛡SHIELD',6,32);}
-  if(magnetActive){ctx.fillStyle='#e040fb';ctx.fillText(`🧲${Math.ceil(magnetTimer/60)}s`,160,32);}
+  ctx.fillText(`SCORE:${score}`,6,15);
+  ctx.fillText(`ST:${stage}`,168,15);
+  ctx.fillText(`AVD:${avoids}/30`,228,15);
+  // 목숨 하트
+  ctx.font='15px sans-serif';
+  ctx.fillText('❤️'.repeat(lives)+'🖤'.repeat(Math.max(0,3-lives)),280,15);
+  // 아이템 상태
+  if(player.shield){ctx.fillStyle='#00e5ff';ctx.font='bold 12px Courier New';ctx.fillText('🛡SHIELD',6,33);}
+  if(magnetActive){ctx.fillStyle='#e040fb';ctx.font='bold 12px Courier New';ctx.fillText(`🧲${Math.ceil(magnetTimer/60)}s`,108,33);}
+  ctx.fillStyle='#ffd54f';ctx.font='bold 12px Courier New';
+  ctx.fillText(`💰${coins}`,280,33);
 }
 
 function drawTitle(){
@@ -624,9 +646,16 @@ function drawTitle(){
   ctx.fillStyle='#ffd54f'; ctx.font='bold 24px Courier New';
   ctx.fillText('PIXEL SKY DODGER',36,112);
   drawPlayer(170,128,PW,PH);
-  ctx.fillStyle='#fff'; ctx.font='14px Courier New';
-  const lines=['방향키/터치로 이동','적기·새·번개 회피!','꽃·코인·상자·자석 수집','자석: 주변 아이템 흡수!'];
-  lines.forEach((l,i)=>ctx.fillText(l,56,240+i*26));
+  ctx.fillStyle='#fff'; ctx.font='13px Courier New';
+  const lines=[
+    '❤️ 목숨 3개로 시작',
+    '✈️ 적기·⚡번개 → 목숨 -1',
+    '🐦 새에 맞으면 → 점수 -10',
+    '⏰+10  🌸+30  피하면+5',
+    '📦방패(5초)  🧲자석(6초)',
+    '30개 피하면 → 다음 스테이지!',
+  ];
+  lines.forEach((l,i)=>ctx.fillText(l,44,234+i*24));
   ctx.fillStyle='#69f0ae'; ctx.font='bold 18px Courier New';
   ctx.fillText('▶  화면 터치로 시작  ◀',60,380);
   ctx.fillStyle='#aaa'; ctx.font='12px Courier New';
@@ -706,8 +735,9 @@ function loop(){
     birds.forEach(b=>drawBird(b.x,b.y,56,44));
     lightnings.forEach(l=>drawLightning(l.x,l.y,36,72));
 
-    // 플레이어
-    drawPlayer(player.x,player.y,PW,PH);
+    // 플레이어 (피격 무적 중 깜박임)
+    if(invincible===0 || Math.floor(invincible/6)%2===0)
+      drawPlayer(player.x,player.y,PW,PH);
     if(player.shield){
       ctx.strokeStyle='rgba(0,229,255,0.8)'; ctx.lineWidth=3;
       ctx.shadowColor='#00e5ff'; ctx.shadowBlur=15;
