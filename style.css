@@ -66,12 +66,12 @@ button {
 }
 
 #fireBtn {
-  flex: 1;
-  height: 110px;
+  width: 90px;
+  height: 90px;
   background: #e53935;
   color: white;
-  font-size: 36px;
-  width: auto;
-  border-radius: 12px;
+  font-size: 32px;
+  border-radius: 50%;
   border: 3px solid #b71c1c;
+  flex-shrink: 0;
 }
