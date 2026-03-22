@@ -13,57 +13,6 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="assets/splash-phone.jpg">
   <link rel="stylesheet" href="style.css">
-  <style>
-    #installBanner {
-      display: none;
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
-      background: rgba(30,30,30,0.97);
-      color: #fff;
-      padding: 12px 16px;
-      text-align: center;
-      font-family: 'Courier New', monospace;
-      font-size: 14px;
-      z-index: 9999;
-      border-top: 2px solid #ffeb3b;
-    }
-    #installBanner .install-title {
-      font-size: 15px;
-      font-weight: bold;
-      color: #ffeb3b;
-      margin-bottom: 6px;
-    }
-    #installBanner .install-row {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      margin-top: 8px;
-    }
-    #installBtn {
-      background: #ffeb3b;
-      color: #000;
-      border: none;
-      border-radius: 8px;
-      padding: 8px 20px;
-      font-size: 14px;
-      font-weight: bold;
-      cursor: pointer;
-      width: auto;
-      height: auto;
-    }
-    #installClose {
-      background: transparent;
-      color: #aaa;
-      border: 1px solid #555;
-      border-radius: 8px;
-      padding: 8px 12px;
-      font-size: 13px;
-      cursor: pointer;
-      width: auto;
-      height: auto;
-    }
-  </style>
 </head>
 <body>
   <canvas id="game" width="400" height="600"></canvas>
@@ -84,58 +33,6 @@
     <button id="fireBtn">🔥</button>
   </div>
 
-  <!-- 홈화면 추가 배너 -->
-  <div id="installBanner">
-    <div class="install-title">📲 홈화면에 추가하면 앱처럼 실행돼요!</div>
-    <div id="iosTip" style="display:none;color:#ccc;font-size:13px;">
-      아래 <b style="color:#4fc3f7">공유 버튼(⬆️)</b> 을 누르고 → <b style="color:#ffeb3b">홈 화면에 추가</b> 선택
-    </div>
-    <div class="install-row">
-      <button id="installBtn" style="display:none">+ 홈화면에 추가</button>
-      <button id="installClose">닫기</button>
-    </div>
-  </div>
-
   <script src="script.js"></script>
-  <script>
-    // 이미 설치(standalone)면 배너 숨김
-    const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
-    if (!isStandalone) {
-      const banner = document.getElementById('installBanner');
-      const installBtn = document.getElementById('installBtn');
-      const closeBtn = document.getElementById('installClose');
-      const iosTip = document.getElementById('iosTip');
-
-      const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
-      const isAndroid = /android/i.test(navigator.userAgent);
-
-      let deferredPrompt = null;
-
-      window.addEventListener('beforeinstallprompt', e => {
-        e.preventDefault();
-        deferredPrompt = e;
-        banner.style.display = 'block';
-        installBtn.style.display = 'inline-block';
-      });
-
-      installBtn.addEventListener('click', async () => {
-        if (deferredPrompt) {
-          deferredPrompt.prompt();
-          const { outcome } = await deferredPrompt.userChoice;
-          deferredPrompt = null;
-          banner.style.display = 'none';
-        }
-      });
-
-      if (isIOS) {
-        banner.style.display = 'block';
-        iosTip.style.display = 'block';
-      }
-
-      closeBtn.addEventListener('click', () => {
-        banner.style.display = 'none';
-      });
-    }
-  </script>
 </body>
 </html>
