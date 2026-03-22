@@ -720,7 +720,7 @@ function drawTitle(){
   const items=[
     ['⏰ 시계','먹으면 +10점'],
     ['🌸 꽃','먹으면 +30점'],
-    ['📦 빨간상자','방패 8초 — 피격 1회 막기'],
+    ['🔨 빨간망치','방패 8초 — 피격 1회 막기'],
     ['🧲 자석','주변 코인 자동 흡수 6초'],
     ['🔥 발사버튼','미사일 발사 → 적 격추 +80'],
   ];
@@ -946,14 +946,52 @@ function loop(){
     });
     lightnings.forEach(l=>spr('lightning',l.x,l.y,40,72));
 
-    // 미사일
+    // 미사일 (리얼 불꽃)
     bullets.forEach(b=>{
-      ctx.fillStyle='#ff1744';
-      ctx.shadowColor='#ff6d00'; ctx.shadowBlur=8;
+      ctx.save();
+      ctx.translate(b.x, b.y);
+
+      // 외곽 글로우
+      ctx.shadowColor='#ff6d00'; ctx.shadowBlur=14;
+
+      // 불꽃 꼬리 (아래쪽 퍼지는 불꽃)
+      const flameGrad = ctx.createLinearGradient(0, 6, 0, 20);
+      flameGrad.addColorStop(0, 'rgba(255,80,0,0.9)');
+      flameGrad.addColorStop(0.5,'rgba(255,160,0,0.6)');
+      flameGrad.addColorStop(1, 'rgba(255,220,0,0)');
+      ctx.fillStyle = flameGrad;
       ctx.beginPath();
-      ctx.ellipse(b.x, b.y, 4, 10, 0, 0, Math.PI*2);
+      ctx.ellipse(0, 13, 5, 10, 0, 0, Math.PI*2);
       ctx.fill();
+
+      // 흔들리는 불꽃 사이드
+      const flick = Math.sin(Date.now()*0.03)*2;
+      const sideGrad = ctx.createLinearGradient(0, 4, 0, 16);
+      sideGrad.addColorStop(0,'rgba(255,120,0,0.7)');
+      sideGrad.addColorStop(1,'rgba(255,200,0,0)');
+      ctx.fillStyle = sideGrad;
+      ctx.beginPath();
+      ctx.ellipse(flick, 10, 3, 8, 0, 0, Math.PI*2);
+      ctx.fill();
+
+      // 탄두 본체 (위쪽 뾰족)
+      const bodyGrad = ctx.createLinearGradient(-4, -10, 4, 6);
+      bodyGrad.addColorStop(0, '#ff1744');
+      bodyGrad.addColorStop(0.5,'#ff5722');
+      bodyGrad.addColorStop(1, '#ff9800');
+      ctx.fillStyle = bodyGrad;
+      ctx.beginPath();
+      ctx.ellipse(0, -2, 4, 10, 0, 0, Math.PI*2);
+      ctx.fill();
+
+      // 탄두 끝 하이라이트
+      ctx.fillStyle='rgba(255,255,200,0.8)';
+      ctx.beginPath();
+      ctx.ellipse(-1, -8, 1.5, 3, 0, 0, Math.PI*2);
+      ctx.fill();
+
       ctx.shadowBlur=0;
+      ctx.restore();
     });
 
     // 플레이어 (피격 무적 중 깜박임)
