@@ -613,6 +613,21 @@ function buildGarden() {
   box(pg, MAT.paving, -3.6, 3.6, -0.02, 0.06, -3.0, 3.0, 1.2);
   pg.position.set(30.0, 0, 8.0); P.add(pg);
 
+  /* --- 기억의 정원 : 표지석 · 자갈마당 · 경석 ------------------------------ */
+  box(P, MAT.stone, 1.6, 2.2, 0, 1.9, 12.6, 15.2, 0);            // 표지석 (기억의 정원)
+  const gravel = new THREE.MeshStandardMaterial({ color: 0xd4d0c6, roughness: 1 });
+  slab(P, gravel, 4.0, 22.0, 11.8, 13.4, 0.04, 1.0);             // 자갈 마당
+  slab(P, gravel, 4.0, 22.0, 1.6, 3.2, 0.04, 1.0);
+  const moss = new THREE.MeshStandardMaterial({ color: 0x4f6b3a, roughness: 1 });
+  [[6.5, 12.4], [12.0, 12.9], [17.5, 12.3], [8.0, 2.4], [14.5, 2.6], [19.5, 2.5]]
+    .forEach(([x, z]) => {
+      const r = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 1), MAT.stone);
+      r.position.set(x, 0.22, z); r.scale.set(1.5, 0.55, 1.1);
+      r.castShadow = true; r.receiveShadow = true; P.add(r);
+      const m = new THREE.Mesh(new THREE.CircleGeometry(1.5, 16), moss);
+      m.rotation.x = -Math.PI / 2; m.position.set(x, 0.05, z); m.receiveShadow = true; P.add(m);
+    });
+
   /* --- 수목 (도로경계 정렬 대칭 식재) ------------------------------------- */
   for (let i = 0; i < 4; i++) tree(P, 5.5 + i * 6.4, 0.6, 5.0, i % 2);      // 도로변 열식
   for (let i = 0; i < 4; i++) tree(P, 6.0 + i * 5.6, 17.4, 5.4, (i + 1) % 2);
@@ -621,6 +636,57 @@ function buildGarden() {
     .forEach(([x, z, h, t]) => tree(P, x, z, h, t));
   return G;
 }
+
+/* =============================================================================
+ *  주변 확경 (위성사진 기준) — 배드민턴장 · 인접 상가 · 농경지
+ * ========================================================================== */
+function buildNeighborhood() {
+  const G = new THREE.Group(); G.name = '확경';
+
+  /* --- 배드민턴장 (대지 동측, 위성사진 위치) ------------------------------ */
+  const court = new THREE.MeshStandardMaterial({ color: 0x2f6b4a, roughness: 0.95 });
+  const courtEdge = new THREE.MeshStandardMaterial({ color: 0x9fb0a3, roughness: 0.95 });
+  slab(G, courtEdge, 50.0, 74.0, 30.0, 66.0, -0.02, 4.0);
+  slab(G, court, 51.5, 72.5, 31.5, 64.5, 0.0, 4.0);
+  // 코트 라인 3면
+  for (let c = 0; c < 3; c++) {
+    const z = 33.5 + c * 10.6;                       // 코트 13.4 x 6.1 (배드민턴 규격)
+    const x = 55.0;
+    [[x, x + 13.4, z, z + 0.1], [x, x + 13.4, z + 6.1, z + 6.2],
+     [x, x + 0.1, z, z + 6.2], [x + 13.4, x + 13.5, z, z + 6.2],
+     [x + 6.65, x + 6.75, z, z + 6.2]].forEach(([a, b, c0, c1]) =>
+      box(G, MAT.line, a, b, 0.005, 0.02, c0, c1, 0));
+    box(G, MAT.metal, x + 6.6, x + 6.8, 0.02, 1.55, z - 0.3, z + 6.5, 0);   // 네트
+  }
+  // 펜스
+  for (let i = 0; i <= 12; i++) box(G, MAT.metal, 50.2 + i * 2.0, 50.35 + i * 2.0, 0, 3.6, 30.2, 30.35, 0);
+  for (let i = 0; i <= 12; i++) box(G, MAT.metal, 50.2 + i * 2.0, 50.35 + i * 2.0, 0, 3.6, 65.7, 65.85, 0);
+  for (let i = 0; i <= 18; i++) box(G, MAT.metal, 50.2, 50.35, 0, 3.6, 30.2 + i * 2.0, 30.35 + i * 2.0, 0);
+  for (let i = 0; i <= 18; i++) box(G, MAT.metal, 73.7, 73.85, 0, 3.6, 30.2 + i * 2.0, 30.35 + i * 2.0, 0);
+  box(G, MAT.metal, 50.2, 73.85, 3.5, 3.62, 30.2, 30.35, 0);
+  box(G, MAT.metal, 50.2, 73.85, 3.5, 3.62, 65.7, 65.85, 0);
+  for (let i = 0; i < 4; i++) tree(G, 77.0, 33.0 + i * 10.0, 6.4, i % 3);
+
+  /* --- 인접 상가 (도로변 북동측) ------------------------------------------ */
+  const panel = new THREE.MeshStandardMaterial({ color: 0xd8d6d0, roughness: 0.7 });
+  const roofM = new THREE.MeshStandardMaterial({ color: 0x4c5157, roughness: 0.6, metalness: 0.4 });
+  const shop = (x0, x1, z0, z1, h) => {
+    box(G, panel, x0, x1, 0, h, z0, z1, 0);
+    box(G, roofM, x0 - 0.3, x1 + 0.3, h, h + 0.35, z0 - 0.3, z1 + 0.3, 0);
+    box(G, MAT.glassW, x0 + 0.6, x1 - 0.6, 0.6, h - 0.9, z0 - 0.12, z0 + 0.02, 0);
+  };
+  shop(52, 68, -22, -10, 4.6);
+  shop(74, 90, -19, -8, 4.2);
+  slab(G, MAT.asphalt, 50, 94, -8, 12, 0.0, 5.0);
+  for (let i = 0; i < 12; i++) box(G, MAT.line, 53 + i * 3.2, 53.1 + i * 3.2, 0.005, 0.02, -6, -1, 0);
+  for (let i = 0; i < 5; i++) tree(G, 51.0, -6.0 + i * 4.2, 5.6, i % 3);
+
+  /* --- 농경지 이랑 (동측 원경) -------------------------------------------- */
+  const soilM = new THREE.MeshStandardMaterial({ color: 0x8a7f66, roughness: 1 });
+  slab(G, soilM, 96, 190, -30, 90, -0.08, 3.0);
+  return G;
+}
+
 /* =============================================================================
  *  씬 구성
  * ========================================================================== */
@@ -669,6 +735,7 @@ function buildScene(renderer) {
   sun.target.position.set(30, 4, 8); scene.add(sun.target); scene.add(sun);
 
   scene.add(buildSite());
+  scene.add(buildNeighborhood());
   scene.add(buildContext());
   scene.add(buildGarden());
   scene.add(buildBuilding());
@@ -680,7 +747,7 @@ const TARGET = new THREE.Vector3(24, 4, 10);
 const VIEWS = {
   front: { name: '정면(35M 도로측) 조감도', pos: [-14, 40, -120], target: [19, 9, -4] },
   back:  { name: '배면 조감도',             pos: [52, 41, 132],   target: [19, 9, 16] },
-  left:  { name: '좌측면 조감도',           pos: [142, 42, -22],  target: [26, 9, 8] },
+  left:  { name: '좌측면 조감도',           pos: [128, 40, 58],   target: [24, 9, 14] },
   right: { name: '우측면 조감도',           pos: [-100, 40, -28], target: [13, 9, 6] },
   top:   { name: '상부(배치) 조감도',       pos: [26, 250, 104],  target: [26, 0, -16] },
 };
