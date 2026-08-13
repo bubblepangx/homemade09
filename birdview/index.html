@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>미장동 장례식장 신축 - 3D 조감도</title>
+<style>
+  html,body{margin:0;height:100%;background:#0e1114;color:#e8e6e1;
+    font-family:-apple-system,BlinkMacSystemFont,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;overflow:hidden}
+  #cv{display:block;width:100%;height:100%}
+  #hud{position:fixed;left:16px;top:16px;background:rgba(14,17,20,.78);border:1px solid #2c3238;
+    border-radius:10px;padding:12px 14px;backdrop-filter:blur(6px);max-width:300px}
+  #hud h1{font-size:14px;margin:0 0 2px;letter-spacing:-.2px}
+  #hud p{font-size:11px;margin:0 0 10px;color:#9aa3ab;line-height:1.5}
+  .btns{display:flex;flex-wrap:wrap;gap:6px}
+  button{background:#1b2027;color:#dfe4e9;border:1px solid #333b44;border-radius:7px;
+    padding:7px 10px;font-size:12px;cursor:pointer}
+  button:hover{background:#252c35}
+  button.on{background:#3d6ea8;border-color:#5a8fd0;color:#fff}
+  #cap{position:fixed;right:16px;bottom:16px;text-align:right;font-size:11px;color:#98a1a9;line-height:1.6}
+  #cap b{color:#e8e6e1;font-size:13px}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="hud">
+  <h1>미장동 장례식장 신축 3D 조감도</h1>
+  <p>전북특별자치도 군산시 미장동 58-45 외 3필지<br>
+     34,500 × 23,000 / 지상 2층 + 옥탑 · 허가용<br>
+     <span style="color:#6f7a83">드래그 회전 · 휠 확대</span></p>
+  <div class="btns" id="btns"></div>
+</div>
+<div id="cap"><b id="vname"></b><br>SCALE : 도면 실측 비율</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="scene.js"></script>
+<script>
+const canvas = document.getElementById('cv');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.02;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = buildScene(renderer);
+const camera = new THREE.PerspectiveCamera(34, 1, 0.5, 900);
+
+/* --- 간이 오빗 컨트롤 --- */
+const target = new THREE.Vector3(24,4,10);
+let sph = new THREE.Spherical(), drag=false, px=0, py=0;
+function setView(v){
+  camera.position.set(...v.pos);
+  target.set(...v.target);
+  sph.setFromVector3(camera.position.clone().sub(target));
+  document.getElementById('vname').textContent = v.name;
+}
+function apply(){ camera.position.copy(target).add(new THREE.Vector3().setFromSpherical(sph)); camera.lookAt(target); }
+canvas.addEventListener('pointerdown', e=>{drag=true;px=e.clientX;py=e.clientY;});
+addEventListener('pointerup', ()=>drag=false);
+addEventListener('pointermove', e=>{
+  if(!drag) return;
+  sph.theta -= (e.clientX-px)*0.005;
+  sph.phi = Math.max(0.06, Math.min(Math.PI/2-0.02, sph.phi - (e.clientY-py)*0.004));
+  px=e.clientX; py=e.clientY; apply();
+});
+canvas.addEventListener('wheel', e=>{
+  e.preventDefault();
+  sph.radius = Math.max(30, Math.min(520, sph.radius * (1 + Math.sign(e.deltaY)*0.09)));
+  apply();
+},{passive:false});
+
+const btns = document.getElementById('btns');
+Object.entries(VIEWS).forEach(([k,v])=>{
+  const b=document.createElement('button');
+  b.textContent = v.name.replace(' 조감도','');
+  b.onclick=()=>{ setView(v); apply();
+    [...btns.children].forEach(c=>c.classList.remove('on')); b.classList.add('on'); };
+  btns.appendChild(b);
+});
+btns.children[0].classList.add('on');
+setView(VIEWS.front); apply();
+
+function resize(){
+  const w=innerWidth,h=innerHeight;
+  renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix();
+}
+addEventListener('resize',resize); resize();
+(function loop(){ requestAnimationFrame(loop); renderer.render(scene,camera); })();
+
+/* 오프스크린 렌더용 훅 */
+window.__shot = (key,w,h)=>{
+  const v=VIEWS[key]; renderer.setSize(w,h,false);
+  camera.aspect=w/h; camera.updateProjectionMatrix();
+  camera.position.set(...v.pos); camera.lookAt(new THREE.Vector3(...v.target));
+  renderer.render(scene,camera);
+  return renderer.domElement.toDataURL('image/jpeg',0.94);
+};
+</script>
+</body>
+</html>
