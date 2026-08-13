@@ -164,6 +164,10 @@ function buildMaterials() {
     metal:   std({ color: 0x8d9296, roughness: 0.35, metalness: 0.8 }),
     car: [0xd8d8dc, 0x2b2f36, 0x8f1f24, 0x22405f, 0xb0b4b8].map(c => std({ color: c, roughness: 0.3, metalness: 0.6 })),
   };
+  Object.entries(MAT).forEach(([k, v]) => {
+    if (Array.isArray(v)) v.forEach((m, i) => { m.name = k + i; });
+    else v.name = k;
+  });
 }
 
 /* ---------- 박스 헬퍼 (면적 비례 텍스처 반복) ------------------------------ */
@@ -428,7 +432,7 @@ function car(G, x, z, rot, ci) {
   box(c, MAT.glassW, -0.78, 0.78, 0.95, 1.42, -0.9, 1.1, 0);
   [[-0.88, -1.5], [0.88, -1.5], [-0.88, 1.5], [0.88, 1.5]].forEach(([wx, wz]) => {
     const t = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.22, 14),
-      new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: .9 }));
+      Object.assign(new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: .9 }), { name: 'tyre' }));
     t.rotation.z = Math.PI / 2; t.position.set(wx, 0.32, wz); t.castShadow = true; c.add(t);
   });
   c.position.set(x, 0, z); c.rotation.y = rot; G.add(c);
@@ -450,8 +454,9 @@ function buildSite() {
     }
   });
   const field = new THREE.MeshStandardMaterial({ map: fieldTex, roughness: 1.0 });
-  field.map.repeat.set(60, 46);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(980, 760), field);
+  field.name = 'field';
+  field.map.repeat.set(200, 160);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(3200, 2600), field);
   ground.rotation.x = -Math.PI / 2; ground.position.set(40, -0.34, 20);
   ground.receiveShadow = true; G.add(ground);
 
@@ -468,7 +473,8 @@ function buildSite() {
       g.fillRect(Math.random() * w, Math.random() * h, 3, 3);
     }
   });
-  polyGround(G, new THREE.MeshStandardMaterial({ map: farmTex, roughness: 1 }), SITE_FARM, -0.12, 9);
+  const farmM = new THREE.MeshStandardMaterial({ map: farmTex, roughness: 1 }); farmM.name = 'farm';
+  polyGround(G, farmM, SITE_FARM, -0.12, 9);
 
   /* --- 조성 구역 : 포장 → 녹지 순으로 깔고 하드스케이프를 위에 얹음 -------- */
   polyGround(G, MAT.paving, SITE_DEV, -0.06, 2.0);
@@ -480,7 +486,8 @@ function buildSite() {
   polyGround(G, MAT.lawn, [[19.2, 46.0], [46.4, 46.0], [46.5, 59.8], [19.1, 59.8]], -0.02, 6.0); // 후면 녹지
 
   /* --- 대지경계선 --------------------------------------------------------- */
-  polyEdge(G, new THREE.MeshStandardMaterial({ color: 0x2b3134, roughness: 0.9 }), SITE, 0.04, 0.24);
+  const edgeM = new THREE.MeshStandardMaterial({ color: 0x2b3134, roughness: 0.9 }); edgeM.name = 'edge';
+  polyEdge(G, edgeM, SITE, 0.04, 0.24);
 
   /* =====================  35M 도로 · 강변로 · 경포천  ===================== */
   const R = new THREE.Group();
@@ -497,19 +504,38 @@ function buildSite() {
     [-31, -13].forEach(z => box(R, MAT.line, x, x + 4, 0.025, 0.04, z, z + 0.16, 0));
   [[6, 14], [28, 36]].forEach(([a, b]) => rs(a, b, -5.4, 0.4, MAT.asphalt, 0.11, 5.0)); // 진·출입구
 
-  // 강변로 · 산책로 · 경포천 — 정면에서 보아 도로 우측
-  rs(40, 240, -56.0, -44.0, MAT.asphalt, 0.02, 6.0);    // 강변로
-  rs(40, 240, -76.0, -56.0, MAT.lawn, -0.02, 6.0);      // 둔치
-  rs(40, 240, -65.0, -62.0, MAT.paving, 0.08, 2.0);     // 산책로
-  rs(40, 240, -78.0, -76.0, MAT.stone, 0.10, 2.0);      // 호안
-  const water = new THREE.Mesh(new THREE.PlaneGeometry(200, 30), MAT.water);
-  water.rotation.x = -Math.PI / 2; water.position.set(140, -0.18, -93);
-  water.receiveShadow = true; R.add(water);
-  rs(40, 240, -110, -108, MAT.stone, 0.10, 2.0);        // 대안 호안
-  for (let i = 0; i < 13; i++) tree(R, 50 + i * 14, -69.5, 6.2, i % 3);
+  // 도로변 인접 상가 (달빛에구운고등어 · 타이어프로 위치)
+  const panelM = new THREE.MeshStandardMaterial({ color: 0xd8d6d0, roughness: 0.7 }); panelM.name = 'panel';
+  const roofMt = new THREE.MeshStandardMaterial({ color: 0x4c5157, roughness: 0.6, metalness: 0.4 }); roofMt.name = 'roofMt';
+  [[48, 64, 5, 20, 4.6], [70, 90, 4, 18, 4.2]].forEach(([a, b, c, d, h]) => {
+    box(R, panelM, a, b, 0, h, c, d, 0);
+    box(R, roofMt, a - 0.3, b + 0.3, h, h + 0.35, c - 0.3, d + 0.3, 0);
+    box(R, MAT.glassW, a + 0.6, b - 0.6, 0.6, h - 0.9, c - 0.12, c + 0.02, 0);
+  });
+  rs(44, 96, 0.5, 5.0, MAT.asphalt, 0.0, 5.0);          // 상가 전면 주차
+  for (let i = 0; i < 12; i++) box(R, MAT.line, 46 + i * 3.4, 46.1 + i * 3.4, 0.025, 0.04, 0.6, 4.6, 0);
   for (let i = 0; i < 22; i++) { const lx = -110 + i * 16;
     if (lx > -6 && lx < 44) continue; tree(R, lx, -2.1, 6.0, (i + 1) % 3); }
   G.add(R);
+
+  /* ===============  경포천 (대지 서측, 남북 방향) + 강변로 · 산책로  ======= */
+  const S = new THREE.Group();
+  S.position.set(-15.5, 0, -66.3);
+  S.rotation.y = 0.7854;                                 // 로컬 +x = 정북
+  const ss = (x0, x1, z0, z1, mat, y, tile) => slab(S, mat, x0, x1, z0, z1, y, tile);
+  ss(-180, 180, 13, 27, MAT.lawn, -0.02, 6.0);           // 동측 둔치
+  ss(-180, 180, -27, -13, MAT.lawn, -0.02, 6.0);         // 서측 둔치
+  ss(-180, 180, 15.5, 18.5, MAT.paving, 0.08, 2.0);      // 산책로 (동안)
+  ss(-180, 180, 27, 40, MAT.asphalt, 0.02, 6.0);         // 강변로 (하포로)
+  ss(-180, 180, -40, -27, MAT.asphalt, 0.02, 6.0);       // 서측 도로
+  ss(-180, 180, 12.4, 13.4, MAT.stone, 0.10, 2.0);       // 호안
+  ss(-180, 180, -13.4, -12.4, MAT.stone, 0.10, 2.0);
+  const stream = new THREE.Mesh(new THREE.PlaneGeometry(360, 25), MAT.water);
+  stream.rotation.x = -Math.PI / 2; stream.position.set(0, -0.20, 0);
+  stream.receiveShadow = true; S.add(stream);
+  for (let i = 0; i < 20; i++) tree(S, -150 + i * 16, 22.0, 6.2, i % 3);
+  for (let i = 0; i < 16; i++) tree(S, -140 + i * 18, -22.0, 6.2, (i + 1) % 3);
+  G.add(S);
 
   /* =====================  구내 동선 (아스팔트)  =========================== */
   slab(G, MAT.asphalt, 31.5, 36.5, -13.5, 25.0, 0.0, 5.0);   // 동측 진입로
@@ -536,7 +562,7 @@ function buildSite() {
   slab(G, MAT.asphalt, 11.5, 18.0, -8.5, -3.0, 0.0, 5.0);
   [12.0, 14.9].forEach((x) => {
     box(G, MAT.line, x, x + 2.8, 0.005, 0.02, -8.0, -3.4, 0);
-    box(G, new THREE.MeshStandardMaterial({ color: 0x2f5fa8, roughness: .9 }),
+    box(G, Object.assign(new THREE.MeshStandardMaterial({ color: 0x2f5fa8, roughness: .9 }), { name: 'bluepaint' }),
         x + 0.15, x + 2.65, 0.02, 0.03, -7.85, -3.55, 0);
   });
 
@@ -616,9 +642,11 @@ function buildGarden() {
   /* --- 기억의 정원 : 표지석 · 자갈마당 · 경석 ------------------------------ */
   box(P, MAT.stone, 1.6, 2.2, 0, 1.9, 12.6, 15.2, 0);            // 표지석 (기억의 정원)
   const gravel = new THREE.MeshStandardMaterial({ color: 0xd4d0c6, roughness: 1 });
+  gravel.name = 'gravel';
   slab(P, gravel, 4.0, 22.0, 11.8, 13.4, 0.04, 1.0);             // 자갈 마당
   slab(P, gravel, 4.0, 22.0, 1.6, 3.2, 0.04, 1.0);
   const moss = new THREE.MeshStandardMaterial({ color: 0x4f6b3a, roughness: 1 });
+  moss.name = 'moss';
   [[6.5, 12.4], [12.0, 12.9], [17.5, 12.3], [8.0, 2.4], [14.5, 2.6], [19.5, 2.5]]
     .forEach(([x, z]) => {
       const r = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 1), MAT.stone);
@@ -645,13 +673,15 @@ function buildNeighborhood() {
 
   /* --- 배드민턴장 (대지 동측, 위성사진 위치) ------------------------------ */
   const court = new THREE.MeshStandardMaterial({ color: 0x2f6b4a, roughness: 0.95 });
+  court.name = 'court';
   const courtEdge = new THREE.MeshStandardMaterial({ color: 0x9fb0a3, roughness: 0.95 });
-  slab(G, courtEdge, 50.0, 74.0, 30.0, 66.0, -0.02, 4.0);
-  slab(G, court, 51.5, 72.5, 31.5, 64.5, 0.0, 4.0);
+  courtEdge.name = 'courtEdge';
+  slab(G, courtEdge, 24.0, 48.0, 72.0, 108.0, -0.02, 4.0);
+  slab(G, court, 25.5, 46.5, 73.5, 106.5, 0.0, 4.0);
   // 코트 라인 3면
   for (let c = 0; c < 3; c++) {
-    const z = 33.5 + c * 10.6;                       // 코트 13.4 x 6.1 (배드민턴 규격)
-    const x = 55.0;
+    const z = 75.5 + c * 10.6;                       // 코트 13.4 x 6.1 (배드민턴 규격)
+    const x = 29.0;
     [[x, x + 13.4, z, z + 0.1], [x, x + 13.4, z + 6.1, z + 6.2],
      [x, x + 0.1, z, z + 6.2], [x + 13.4, x + 13.5, z, z + 6.2],
      [x + 6.65, x + 6.75, z, z + 6.2]].forEach(([a, b, c0, c1]) =>
@@ -659,30 +689,17 @@ function buildNeighborhood() {
     box(G, MAT.metal, x + 6.6, x + 6.8, 0.02, 1.55, z - 0.3, z + 6.5, 0);   // 네트
   }
   // 펜스
-  for (let i = 0; i <= 12; i++) box(G, MAT.metal, 50.2 + i * 2.0, 50.35 + i * 2.0, 0, 3.6, 30.2, 30.35, 0);
-  for (let i = 0; i <= 12; i++) box(G, MAT.metal, 50.2 + i * 2.0, 50.35 + i * 2.0, 0, 3.6, 65.7, 65.85, 0);
-  for (let i = 0; i <= 18; i++) box(G, MAT.metal, 50.2, 50.35, 0, 3.6, 30.2 + i * 2.0, 30.35 + i * 2.0, 0);
-  for (let i = 0; i <= 18; i++) box(G, MAT.metal, 73.7, 73.85, 0, 3.6, 30.2 + i * 2.0, 30.35 + i * 2.0, 0);
-  box(G, MAT.metal, 50.2, 73.85, 3.5, 3.62, 30.2, 30.35, 0);
-  box(G, MAT.metal, 50.2, 73.85, 3.5, 3.62, 65.7, 65.85, 0);
-  for (let i = 0; i < 4; i++) tree(G, 77.0, 33.0 + i * 10.0, 6.4, i % 3);
-
-  /* --- 인접 상가 (도로변 북동측) ------------------------------------------ */
-  const panel = new THREE.MeshStandardMaterial({ color: 0xd8d6d0, roughness: 0.7 });
-  const roofM = new THREE.MeshStandardMaterial({ color: 0x4c5157, roughness: 0.6, metalness: 0.4 });
-  const shop = (x0, x1, z0, z1, h) => {
-    box(G, panel, x0, x1, 0, h, z0, z1, 0);
-    box(G, roofM, x0 - 0.3, x1 + 0.3, h, h + 0.35, z0 - 0.3, z1 + 0.3, 0);
-    box(G, MAT.glassW, x0 + 0.6, x1 - 0.6, 0.6, h - 0.9, z0 - 0.12, z0 + 0.02, 0);
-  };
-  shop(52, 68, -22, -10, 4.6);
-  shop(74, 90, -19, -8, 4.2);
-  slab(G, MAT.asphalt, 50, 94, -8, 12, 0.0, 5.0);
-  for (let i = 0; i < 12; i++) box(G, MAT.line, 53 + i * 3.2, 53.1 + i * 3.2, 0.005, 0.02, -6, -1, 0);
-  for (let i = 0; i < 5; i++) tree(G, 51.0, -6.0 + i * 4.2, 5.6, i % 3);
+  for (let i = 0; i <= 12; i++) box(G, MAT.metal, 24.2 + i * 2.0, 24.35 + i * 2.0, 0, 3.6, 72.2, 72.35, 0);
+  for (let i = 0; i <= 12; i++) box(G, MAT.metal, 24.2 + i * 2.0, 24.35 + i * 2.0, 0, 3.6, 107.7, 107.85, 0);
+  for (let i = 0; i <= 18; i++) box(G, MAT.metal, 24.2, 24.35, 0, 3.6, 72.2 + i * 2.0, 72.35 + i * 2.0, 0);
+  for (let i = 0; i <= 18; i++) box(G, MAT.metal, 47.7, 47.85, 0, 3.6, 72.2 + i * 2.0, 72.35 + i * 2.0, 0);
+  box(G, MAT.metal, 24.2, 47.85, 3.5, 3.62, 72.2, 72.35, 0);
+  box(G, MAT.metal, 24.2, 47.85, 3.5, 3.62, 107.7, 107.85, 0);
+  for (let i = 0; i < 4; i++) tree(G, 51.0, 75.0 + i * 10.0, 6.4, i % 3);
 
   /* --- 농경지 이랑 (동측 원경) -------------------------------------------- */
   const soilM = new THREE.MeshStandardMaterial({ color: 0x8a7f66, roughness: 1 });
+  soilM.name = 'soilM';
   slab(G, soilM, 96, 190, -30, 90, -0.08, 3.0);
   return G;
 }
@@ -752,4 +769,30 @@ const VIEWS = {
   top:   { name: '상부(배치) 조감도',       pos: [26, 250, 104],  target: [26, 0, -16] },
 };
 
-if (typeof window !== 'undefined') { window.buildScene = buildScene; window.VIEWS = VIEWS; window.BSPEC = B; }
+function exportScene(scene) {
+  const out = [];
+  scene.traverse(o => {
+    if (!o.isMesh) return;
+    o.updateWorldMatrix(true, false);
+    const g = o.geometry, p = g.parameters || {};
+    const mat = Array.isArray(o.material) ? o.material[0] : o.material;
+    const rec = { mat: mat.name || 'default', m: o.matrixWorld.elements.slice(),
+                  color: '#' + mat.color.getHexString() };
+    if (g.type === 'BoxGeometry') { rec.t = 'box'; rec.s = [p.width, p.height, p.depth]; }
+    else if (g.type === 'PlaneGeometry') { rec.t = 'plane'; rec.s = [p.width, p.height]; }
+    else if (g.type === 'CylinderGeometry') { rec.t = 'cyl'; rec.s = [p.radiusTop, p.radiusBottom, p.height]; }
+    else if (g.type === 'ConeGeometry') { rec.t = 'cone'; rec.s = [p.radius, p.height]; }
+    else if (g.type === 'IcosahedronGeometry') { rec.t = 'ico'; rec.s = [p.radius]; }
+    else if (g.type === 'CircleGeometry') { rec.t = 'circle'; rec.s = [p.radius]; }
+    else if (g.type === 'SphereGeometry') { return; }                       // 하늘돔 제외
+    else { rec.t = 'mesh';
+      rec.v = Array.from(g.attributes.position.array);
+      rec.i = g.index ? Array.from(g.index.array) : null; }
+    out.push(rec);
+  });
+  return out;
+}
+if (typeof window !== 'undefined') {
+  window.buildScene = buildScene; window.VIEWS = VIEWS; window.BSPEC = B;
+  window.exportScene = exportScene;
+}
