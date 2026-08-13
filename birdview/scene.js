@@ -99,7 +99,7 @@ function lawnTex() {
   return makeTex(512, 512, (g, w, h) => {
     g.fillStyle = '#6f8f52'; g.fillRect(0, 0, w, h);
     for (let i = 0; i < 2; i++) {
-      g.fillStyle = i ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+      g.fillStyle = i ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.035)';
       g.fillRect(0, i * h / 2, w, h / 2);
     }
     for (let i = 0; i < 24000; i++) {
@@ -324,12 +324,123 @@ function buildBuilding() {
 }
 
 /* =============================================================================
- *  대지 · 외부 (배치도 1/500 기준, 전/답 제외 구역은 미조성)
+ *  대지 · 외부  — 배치도(1/500) 치수체인으로 복원한 실제 필지 형상
+ *
+ *  배치도 좌표(u:도면 우, v:도면 하, 건물 북서모서리 원점) → 모델 좌표
+ *      X = 34.5 - v ,  Z = u          (건물 정면 = Z=0 = 35M 도로측)
+ *
+ *  치수체인 검증
+ *    상단  8,591 | 23,000 | 110,684   → Z=-8.6 · 건물 · 동측 장변 110.7
+ *    좌측  10,089 | 34,500 | 10,446   → X=+44.6 · 건물 · X=-10.4
+ *    하단  3,961 | 23,000 | 2,136     → Z=-4.0 · 건물 · Z=+25.1
+ *
+ *  → 전면부는 35M 도로경계에 약 42° 사선인 삼각형, 배면은 110m 장방형 띠(전/답)
+ * ========================================================================== */
+
+const SITE = [                     // 대지경계 (4필지 합)
+  [44.6,  -8.6],   // 도로경계 교점 (8,591)
+  [45.5,  25.1],
+  [47.6, 133.7],   // 동측 장변 끝 (110,684)
+  [19.4, 133.7],
+  [18.4,  25.1],
+  [-10.4, 25.1],   // (2,136)
+  [-10.4, -4.0],   // (3,961)
+  [16.3, -34.5],   // 서측 첨단부
+];
+const SITE_DEV = [                 // 조성 구역
+  [44.6, -8.6], [45.5, 25.1], [46.6, 60.0], [19.0, 60.0], [18.4, 25.1],
+  [-10.4, 25.1], [-10.4, -4.0], [16.3, -34.5],
+];
+const SITE_FARM = [                // 전 / 답 — 조성 제외
+  [46.6, 60.0], [47.6, 133.7], [19.4, 133.7], [19.0, 60.0],
+];
+
+/* 35M 도로 로컬 좌표계 : 원점 P8, +x = 도로경계 방향, +z = 대지측 */
+const ROAD = { org: [16.3, -34.5], rot: -0.7412 };
+const RC = Math.cos(ROAD.rot), RS = Math.sin(ROAD.rot);          // 0.737 / -0.675
+const L2W = (lx, lz) => [ROAD.org[0] + lx * RC + lz * RS,
+                         ROAD.org[1] - lx * RS + lz * RC];
+
+/* 전면 대지경계까지의 Z (X별) — 배치 검토용 */
+function frontZ(x) {
+  return x <= 16.3 ? -4.0 - 1.142 * (x + 10.4)
+                   : -34.5 + 0.915 * (x - 16.3);
+}
+
+/* ---------- 폴리곤 지반 ---------------------------------------------------- */
+function polyGround(parent, mat, pts, y, tileScale) {
+  const sh = new THREE.Shape(pts.map(p => new THREE.Vector2(p[0], -p[1])));
+  const g = new THREE.ShapeGeometry(sh);
+  g.rotateX(-Math.PI / 2); g.translate(0, y, 0);
+  const uv = g.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / tileScale, uv.getY(i) / tileScale);
+  const m = mat.clone();
+  if (mat.map) { m.map = mat.map.clone(); m.map.needsUpdate = true; }
+  const mesh = new THREE.Mesh(g, m);
+  mesh.receiveShadow = true; parent.add(mesh);
+  return mesh;
+}
+function polyEdge(parent, mat, pts, y, w) {
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(L, 0.05, w), mat);
+    m.position.set((a[0] + b[0]) / 2, y, (a[1] + b[1]) / 2);
+    m.rotation.y = Math.atan2(-dz, dx);
+    parent.add(m);
+  }
+}
+
+/* ---------- 수목 ----------------------------------------------------------- */
+function tree(G, x, z, h = 6, type = 0, rnd = Math.random) {
+  const t = new THREE.Group();
+  const tr = new THREE.Mesh(new THREE.CylinderGeometry(h * 0.035, h * 0.06, h * 0.45, 8), MAT.trunk);
+  tr.position.y = h * 0.225; tr.castShadow = true; t.add(tr);
+  if (type === 2) {
+    const c = new THREE.Mesh(new THREE.ConeGeometry(h * 0.26, h * 0.8, 10), MAT.leaf2);
+    c.position.y = h * 0.62; c.castShadow = true; t.add(c);
+  } else {
+    const m = type === 1 ? MAT.leaf3 : MAT.leaf1;
+    [[0, 0.62, 0, 1.0], [0.3, 0.78, 0.15, 0.72], [-0.28, 0.72, -0.2, 0.66]].forEach(([dx, dy, dz, s]) => {
+      const b = new THREE.Mesh(new THREE.IcosahedronGeometry(h * 0.26 * s, 1), m);
+      b.position.set(dx * h * 0.3, h * dy, dz * h * 0.3);
+      b.castShadow = true; t.add(b);
+    });
+  }
+  t.position.set(x, 0, z); t.rotation.y = rnd() * 3;
+  G.add(t);
+}
+
+/* ---------- 주차구획 · 차량 ------------------------------------------------ */
+// 'x' : 구획이 X방향으로 나열 (차량은 Z방향 주차)
+function stalls(G, n, x0, z0, dir, w = 2.5, d = 5.0) {
+  const t = 0.12;
+  for (let i = 0; i <= n; i++) {
+    if (dir === 'x') box(G, MAT.line, x0 + i * w, x0 + i * w + t, 0.005, 0.02, z0, z0 + d, 0);
+    else             box(G, MAT.line, x0, x0 + d, 0.005, 0.02, z0 + i * w, z0 + i * w + t, 0);
+  }
+  if (dir === 'x') box(G, MAT.line, x0, x0 + n * w + t, 0.005, 0.02, z0 + d - t, z0 + d, 0);
+  else             box(G, MAT.line, x0 + d - t, x0 + d, 0.005, 0.02, z0, z0 + n * w + t, 0);
+}
+function car(G, x, z, rot, ci) {
+  const c = new THREE.Group();
+  box(c, MAT.car[ci % 5], -0.85, 0.85, 0.25, 0.95, -2.2, 2.2, 0);
+  box(c, MAT.glassW, -0.78, 0.78, 0.95, 1.42, -0.9, 1.1, 0);
+  [[-0.88, -1.5], [0.88, -1.5], [-0.88, 1.5], [0.88, 1.5]].forEach(([wx, wz]) => {
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.22, 14),
+      new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: .9 }));
+    t.rotation.z = Math.PI / 2; t.position.set(wx, 0.32, wz); t.castShadow = true; c.add(t);
+  });
+  c.position.set(x, 0, z); c.rotation.y = rot; G.add(c);
+}
+
+/* =============================================================================
+ *  대지 · 도로 · 주차
  * ========================================================================== */
 function buildSite() {
   const G = new THREE.Group(); G.name = '대지';
 
-  /* --- 지반 (주변 전/답 = 미조성 구역, 조감 범위만 표현) ------------------- */
+  /* --- 주변 지반 ---------------------------------------------------------- */
   const fieldTex = makeTex(256, 256, (g, w, h) => {
     g.fillStyle = '#8f9679'; g.fillRect(0, 0, w, h);
     for (let i = 0; i < 16000; i++) {
@@ -341,81 +452,110 @@ function buildSite() {
   const field = new THREE.MeshStandardMaterial({ map: fieldTex, roughness: 1.0 });
   field.map.repeat.set(60, 46);
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(980, 760), field);
-  ground.rotation.x = -Math.PI / 2; ground.position.set(40, -0.30, -18);
+  ground.rotation.x = -Math.PI / 2; ground.position.set(40, -0.34, 20);
   ground.receiveShadow = true; G.add(ground);
 
-  /* --- 대지 정지면 (포장/잔디) -------------------------------------------- */
-  slab(G, MAT.paving, -14, 44, -26, 32, -0.02, 2.0);              // 건물 주변 포장
-  slab(G, MAT.asphalt, -8, 44, -26, -13, 0.0, 5.0);               // 주차장 아스팔트
-  slab(G, MAT.lawn, 44, 96, -14, 30, -0.03, 6.0);                 // 정원 조성부
-  slab(G, MAT.lawn, -14, -6, -26, 32, -0.03, 6.0);                // 서측 완충녹지
+  /* --- 전 / 답 (조성 제외) ------------------------------------------------ */
+  const farmTex = makeTex(256, 256, (g, w, h) => {
+    g.fillStyle = '#7e8461'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 8; i++) {
+      g.fillStyle = i % 2 ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)';
+      g.fillRect(0, i * h / 8, w, h / 16);
+    }
+    for (let i = 0; i < 12000; i++) {
+      const v = Math.random() * 30;
+      g.fillStyle = `rgba(${118 + v},${128 + v},${88 + v},0.30)`;
+      g.fillRect(Math.random() * w, Math.random() * h, 3, 3);
+    }
+  });
+  polyGround(G, new THREE.MeshStandardMaterial({ map: farmTex, roughness: 1 }), SITE_FARM, -0.12, 9);
 
-  /* --- 35M 도로 (정면) + 보도 --------------------------------------------- */
-  slab(G, MAT.paving, -60, 120, -30, -26, 0.06, 2.0);             // 보도
-  slab(G, MAT.asphalt, -60, 120, -65, -30, 0.0, 6.0);             // 차도 35m
-  for (let x = -58; x < 120; x += 6)                              // 중앙선
-    box(G, MAT.line, x, x + 3.2, 0.005, 0.02, -47.3, -46.9, 0);
-  for (let x = -58; x < 120; x += 8) {                            // 차선
-    [-56, -38].forEach(z => box(G, MAT.line, x, x + 4, 0.005, 0.02, z, z + 0.16, 0));
-  }
-  /* --- 강변로 + 산책로 + 경포천 (35M 도로 건너 우측) ---------------------- */
-  slab(G, MAT.asphalt, 10, 190, -78, -66, 0.0, 6.0);              // 강변로
-  slab(G, MAT.lawn, 10, 190, -92, -78, -0.02, 6.0);               // 하천 둔치
-  slab(G, MAT.paving, 10, 190, -86, -83, 0.04, 2.0);              // 산책로
-  const water = new THREE.Mesh(new THREE.PlaneGeometry(180, 24), MAT.water);
-  water.rotation.x = -Math.PI / 2; water.position.set(100, -0.22, -105);
-  water.receiveShadow = true; G.add(water);                        // 경포천
-  slab(G, MAT.stone, 10, 190, -118, -116, 0.15, 2.0);             // 호안(대안)
-  slab(G, MAT.stone, 10, 190, -94, -92, 0.15, 2.0);               // 호안(근안)
+  /* --- 조성 구역 : 포장 → 녹지 순으로 깔고 하드스케이프를 위에 얹음 -------- */
+  polyGround(G, MAT.paving, SITE_DEV, -0.06, 2.0);
+  // 전면 삼각 녹지 (도로경계 기준 정형)
+  polyGround(G, MAT.lawn, [L2W(1.6, 1.6), L2W(38.2, 1.6), L2W(38.2, 13.0),
+                           L2W(24.0, 13.5), L2W(20.0, 21.0), L2W(3.0, 21.0)], -0.02, 6.0);
+  polyGround(G, MAT.lawn, [[38.5, -11.5], [44.4, -8.9], [45.3, 24.9], [38.5, 24.9]], -0.02, 6.0); // 북측 녹지
+  polyGround(G, MAT.lawn, [[-10.2, -3.6], [-9.6, 24.9], [-10.2, 24.9]], -0.02, 6.0);
+  polyGround(G, MAT.lawn, [[19.2, 46.0], [46.4, 46.0], [46.5, 59.8], [19.1, 59.8]], -0.02, 6.0); // 후면 녹지
 
-  /* --- 주차구획 (배치도 : 정면 전면 + 서측) -------------------------------- */
-  const stall = (x, z, w = 2.5, d = 5.0, rot = 0) => {
-    const t = 0.1;
-    box(G, MAT.line, x, x + t, 0.005, 0.02, z, z + d, 0);
-    box(G, MAT.line, x + w, x + w + t, 0.005, 0.02, z, z + d, 0);
-    box(G, MAT.line, x, x + w, 0.005, 0.02, z, z + t, 0);
-  };
-  for (let i = 0; i < 8; i++) stall(2 + i * 2.6, -24.5);           // 전면 8대
-  for (let i = 0; i < 6; i++) stall(24 + i * 2.6, -24.5);          // 전면 6대
-  for (let i = 0; i < 6; i++) stall(-5.0, -14 + i * 2.6, 5.0, 2.5);// 서측 6대 (평행)
-  // 장애인 주차 2면
-  [24.0, 27.0].forEach(x => {
-    box(G, MAT.line, x, x + 2.9, 0.005, 0.02, -19.6, -14.6, 0);
+  /* --- 대지경계선 --------------------------------------------------------- */
+  polyEdge(G, new THREE.MeshStandardMaterial({ color: 0x2b3134, roughness: 0.9 }), SITE, 0.04, 0.24);
+
+  /* =====================  35M 도로 · 강변로 · 경포천  ===================== */
+  const R = new THREE.Group();
+  R.position.set(ROAD.org[0], 0, ROAD.org[1]);
+  R.rotation.y = ROAD.rot;
+  const rs = (x0, x1, z0, z1, mat, y, tile) => slab(R, mat, x0, x1, z0, z1, y, tile);
+
+  rs(-120, 220, -4.5, 0.3, MAT.paving, 0.10, 2.0);      // 대지측 보도
+  rs(-120, 220, -39.5, -4.5, MAT.asphalt, 0.02, 6.0);   // 차도 35M
+  rs(-120, 220, -44.0, -39.5, MAT.paving, 0.10, 2.0);   // 건너편 보도
+  for (let x = -118; x < 218; x += 6)
+    box(R, MAT.line, x, x + 3.4, 0.025, 0.04, -22.2, -21.8, 0);          // 중앙선
+  for (let x = -118; x < 218; x += 8)
+    [-31, -13].forEach(z => box(R, MAT.line, x, x + 4, 0.025, 0.04, z, z + 0.16, 0));
+  [[6, 14], [28, 36]].forEach(([a, b]) => rs(a, b, -5.4, 0.4, MAT.asphalt, 0.11, 5.0)); // 진·출입구
+
+  // 강변로 · 산책로 · 경포천 — 정면에서 보아 도로 우측
+  rs(40, 240, -56.0, -44.0, MAT.asphalt, 0.02, 6.0);    // 강변로
+  rs(40, 240, -76.0, -56.0, MAT.lawn, -0.02, 6.0);      // 둔치
+  rs(40, 240, -65.0, -62.0, MAT.paving, 0.08, 2.0);     // 산책로
+  rs(40, 240, -78.0, -76.0, MAT.stone, 0.10, 2.0);      // 호안
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(200, 30), MAT.water);
+  water.rotation.x = -Math.PI / 2; water.position.set(140, -0.18, -93);
+  water.receiveShadow = true; R.add(water);
+  rs(40, 240, -110, -108, MAT.stone, 0.10, 2.0);        // 대안 호안
+  for (let i = 0; i < 13; i++) tree(R, 50 + i * 14, -69.5, 6.2, i % 3);
+  for (let i = 0; i < 22; i++) { const lx = -110 + i * 16;
+    if (lx > -6 && lx < 44) continue; tree(R, lx, -2.1, 6.0, (i + 1) % 3); }
+  G.add(R);
+
+  /* =====================  구내 동선 (아스팔트)  =========================== */
+  slab(G, MAT.asphalt, 31.5, 36.5, -13.5, 25.0, 0.0, 5.0);   // 동측 진입로
+  slab(G, MAT.asphalt, -3.0, 2.0, -13.5, 24.5, 0.0, 5.0);    // 서측 순환로
+  slab(G, MAT.asphalt, -3.0, 36.5, -13.5, -9.0, 0.0, 5.0);   // 전면 연결로
+  slab(G, MAT.asphalt, -3.0, 36.5, 20.0, 24.5, 0.0, 5.0);    // 후면 연결로
+  slab(G, MAT.asphalt, 20.0, 25.0, 24.0, 31.0, 0.0, 5.0);    // 후면 주차 진입
+
+  /* =====================  주차 22면 (배치도 3개소)  ======================= */
+  // ① 서측 6면
+  slab(G, MAT.asphalt, -9.5, -3.0, 1.0, 17.0, 0.0, 5.0);
+  stalls(G, 6, -8.5, 1.5, 'z');
+  [0, 2, 4].forEach((i, k) => car(G, -6.0, 3.75 + i * 2.5, Math.PI / 2, k));
+  // ② 전면 6면 (배치도 : 정면 좌측)
+  slab(G, MAT.asphalt, 5.0, 20.5, -18.5, -12.5, 0.0, 5.0);
+  stalls(G, 6, 5.6, -18.0, 'x');
+  [0, 1, 3, 5].forEach((i, k) => car(G, 6.85 + i * 2.5, -15.5, 0, k + 1));
+  // ③ 후면 8면
+  slab(G, MAT.asphalt, 19.5, 37.0, 30.0, 42.0, 0.0, 5.0);
+  stalls(G, 4, 20.5, 30.6, 'x');  stalls(G, 4, 20.5, 36.4, 'x');
+  [0, 2].forEach((i, k) => car(G, 21.75 + i * 2.5, 33.1, 0, k));
+  [1, 3].forEach((i, k) => car(G, 21.75 + i * 2.5, 38.9, 0, k + 3));
+  // 장애인 2면 (주출입 인접)
+  slab(G, MAT.asphalt, 11.5, 18.0, -8.5, -3.0, 0.0, 5.0);
+  [12.0, 14.9].forEach((x) => {
+    box(G, MAT.line, x, x + 2.8, 0.005, 0.02, -8.0, -3.4, 0);
     box(G, new THREE.MeshStandardMaterial({ color: 0x2f5fa8, roughness: .9 }),
-        x + 0.15, x + 2.75, 0.02, 0.03, -19.45, -14.75, 0);
+        x + 0.15, x + 2.65, 0.02, 0.03, -7.85, -3.55, 0);
   });
 
-  /* --- 차량 (스케일 기준) --------------------------------------------------- */
-  const car = (x, z, rot = 0, ci = 0) => {
-    const c = new THREE.Group();
-    box(c, MAT.car[ci % 5], -0.85, 0.85, 0.25, 0.95, -2.2, 2.2, 0);
-    box(c, MAT.glassW, -0.78, 0.78, 0.95, 1.42, -0.9, 1.1, 0);
-    [[-0.88, -1.5], [0.88, -1.5], [-0.88, 1.5], [0.88, 1.5]].forEach(([wx, wz]) => {
-      const t = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.22, 14),
-        new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: .9 }));
-      t.rotation.z = Math.PI / 2; t.position.set(wx, 0.32, wz); t.castShadow = true; c.add(t);
-    });
-    c.position.set(x, 0, z); c.rotation.y = rot; G.add(c);
-  };
-  [0, 1, 3, 4, 6].forEach((i, k) => car(3.25 + i * 2.6, -22.0, 0, k));
-  [0, 2, 3].forEach((i, k) => car(25.25 + i * 2.6, -22.0, 0, k + 2));
-  car(-2.5, -10.0, Math.PI / 2, 1);
-  car(-2.5, -4.0, Math.PI / 2, 4);
+  /* --- 광장 · 보행 ---------------------------------------------------------- */
+  slab(G, MAT.paving, 19.0, 30.0, -9.5, -0.2, 0.06, 1.2);    // 주출입 광장 · 드롭오프
+  slab(G, MAT.paving, 34.0, 39.5, -6.0, 24.0, 0.05, 1.2);    // 발인 동선 (좌측면 출입)
+  slab(G, MAT.paving, 2.0, 19.0, -2.5, -0.2, 0.05, 1.2);     // 정면 보행로
 
-  slab(G, MAT.asphalt, -8, -0.5, -14, 4.5, 0.0, 5.0);             // 서측 주차 아스팔트
-  slab(G, MAT.asphalt, 6, 16, -31, -25, 0.07, 5.0);               // 진입로 (도로 → 주차장)
-  slab(G, MAT.asphalt, 30, 38, -31, -25, 0.07, 5.0);              // 진출로
-
-  /* --- 진입 드롭오프 광장 --------------------------------------------------- */
-  slab(G, MAT.paving, 17.5, 28.5, -13.0, -0.2, 0.05, 1.2);
-
-  /* --- 대지경계 식재대 (완충녹지) ------------------------------------------ */
-  for (let i = 0; i < 22; i++) box(G, MAT.hedge, -13.4, -12.0, 0, 0.8, -25 + i * 2.6, -23.8 + i * 2.6, 0);
-  for (let i = 0; i < 20; i++) box(G, MAT.hedge, -12 + i * 2.9, -10.8 + i * 2.9, 0, 0.8, 30.4, 31.8, 0);
+  /* --- 경계 식재대 · 가로수 ------------------------------------------------- */
+  for (let i = 0; i < 9; i++) box(G, MAT.hedge, 37.6, 38.8, 0, 0.8, -6.0 + i * 3.0, -4.9 + i * 3.0, 0);
+  for (let i = 0; i < 8; i++) box(G, MAT.hedge, -2.0 + i * 3.0, -0.9 + i * 3.0, 0, 0.8, 24.8, 26.0, 0);
+  for (let i = 0; i < 5; i++) tree(G, 42.0, -4.0 + i * 6.5, 6.4, i % 3);
+  for (let i = 0; i < 4; i++) tree(G, -6.5, 20.0 + i * 0.1, 6.2, i % 3);
+  for (let i = 0; i < 5; i++) tree(G, 22.0 + i * 6.0, 47.5, 6.4, i % 3);
+  for (let i = 0; i < 4; i++) tree(G, 44.0, 30.0 + i * 8.0, 6.4, (i + 1) % 3);
   return G;
 }
 
-/* --- 원경 수목대 (조감 배경) ---------------------------------------------- */
+/* --- 원경 수목대 ----------------------------------------------------------- */
 function buildContext() {
   const G = new THREE.Group(); G.name = '원경';
   let seed = 7;
@@ -423,91 +563,64 @@ function buildContext() {
   const belt = (x0, x1, z0, z1, n, hmin, hmax) => {
     for (let i = 0; i < n; i++)
       tree(G, x0 + rnd() * (x1 - x0), z0 + rnd() * (z1 - z0),
-           hmin + rnd() * (hmax - hmin), Math.floor(rnd() * 3));
+           hmin + rnd() * (hmax - hmin), Math.floor(rnd() * 3), rnd);
   };
-  belt(-140, 240, 66, 102, 40, 6, 11);        // 배면측
-  belt(-150, -70, -60, 90, 22, 6, 11);       // 우측
-  belt(120, 250, -50, 90, 26, 6, 11);        // 좌측(정원 너머)
-  belt(-140, 250, -150, -122, 30, 6, 11);    // 하천 건너편
+  belt(-130, -30, -50, 130, 26, 6, 11);
+  belt(58, 150, -10, 150, 28, 6, 11);
+  belt(-60, 160, 150, 215, 28, 6, 11);
   return G;
 }
 
 /* =============================================================================
- *  조경 — 정적인 물가가 있는 호텔형 정원 (동측 정원부)
+ *  조경 — 정적인 물가가 있는 호텔형 전면 정원 (35M 도로에 정렬)
  * ========================================================================== */
-function tree(G, x, z, h = 6, type = 0) {
-  const t = new THREE.Group();
-  const tr = new THREE.Mesh(new THREE.CylinderGeometry(h * 0.035, h * 0.06, h * 0.45, 8), MAT.trunk);
-  tr.position.y = h * 0.225; tr.castShadow = true; t.add(tr);
-  if (type === 2) {                                    // 침엽수
-    const c = new THREE.Mesh(new THREE.ConeGeometry(h * 0.26, h * 0.8, 10), MAT.leaf2);
-    c.position.y = h * 0.62; c.castShadow = true; t.add(c);
-  } else {                                             // 활엽수 (덩어리 3개)
-    const m = type === 1 ? MAT.leaf3 : MAT.leaf1;
-    [[0, 0.62, 0, 1.0], [0.3, 0.78, 0.15, 0.72], [-0.28, 0.72, -0.2, 0.66]].forEach(([dx, dy, dz, s]) => {
-      const b = new THREE.Mesh(new THREE.IcosahedronGeometry(h * 0.26 * s, 1), m);
-      b.position.set(dx * h * 0.3, h * dy, dz * h * 0.3);
-      b.castShadow = true; t.add(b);
-    });
-  }
-  t.position.set(x, 0, z); t.rotation.y = Math.random() * 3;
-  G.add(t);
-}
-
 function buildGarden() {
   const G = new THREE.Group(); G.name = '정원';
 
-  /* --- 정적 수경(반사 연못) : 24.0 x 11.0 --------------------------------- */
-  const px0 = 50, px1 = 74, pz0 = 2, pz1 = 13;
-  bandFrame(G, MAT.stone, px0 - 0.8, px1 + 0.8, -0.05, 0.22, pz0 - 0.8, pz1 + 0.8, 0.8); // 석재 테두리
-  box(G, MAT.soil, px0, px1, -0.5, 0.06, pz0, pz1, 0);
-  const w = new THREE.Mesh(new THREE.PlaneGeometry(px1 - px0, pz1 - pz0), MAT.water);
-  w.rotation.x = -Math.PI / 2; w.position.set((px0 + px1) / 2, 0.09, (pz0 + pz1) / 2);
-  w.receiveShadow = true; G.add(w);
-  // 디딤석 (수면 위)
-  for (let i = 0; i < 9; i++)
-    box(G, MAT.stone, px0 + 2.2 + i * 2.4, px0 + 3.8 + i * 2.4, 0.06, 0.20, 7.0, 8.6, 0);
-  // 수경 상부 정형 화단 · 낮은 관목 열
-  for (let i = 0; i < 12; i++) {
-    box(G, MAT.hedge, px0 - 0.2 + i * 2.0, px0 + 1.3 + i * 2.0, 0, 0.55, pz0 - 2.6, pz0 - 1.5, 0);
-    box(G, MAT.hedge, px0 - 0.2 + i * 2.0, px0 + 1.3 + i * 2.0, 0, 0.55, pz1 + 1.5, pz1 + 2.6, 0);
+  /* 도로경계에 정렬된 정원 로컬 프레임 */
+  const P = new THREE.Group();
+  P.position.set(ROAD.org[0], 0, ROAD.org[1]);
+  P.rotation.y = ROAD.rot;
+  G.add(P);
+
+  /* --- 정적 수경 (반사 연못 18.0 × 5.0) ----------------------------------- */
+  const x0 = 4.0, x1 = 22.0, z0 = 5.0, z1 = 10.0;
+  bandFrame(P, MAT.stone, x0 - 0.9, x1 + 0.9, -0.06, 0.24, z0 - 0.9, z1 + 0.9, 0.9);
+  box(P, MAT.soil, x0, x1, -0.5, 0.06, z0, z1, 0);
+  const w = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), MAT.water);
+  w.rotation.x = -Math.PI / 2; w.position.set((x0 + x1) / 2, 0.11, (z0 + z1) / 2);
+  w.receiveShadow = true; P.add(w);
+  for (let i = 0; i < 7; i++)                                     // 디딤석
+    box(P, MAT.stone, x0 + 1.4 + i * 2.3, x0 + 2.7 + i * 2.3, 0.08, 0.22, 6.8, 8.2, 0);
+
+  /* --- 정형 관목 열 · 산책 동선 ------------------------------------------- */
+  for (let i = 0; i < 9; i++) {
+    box(P, MAT.hedge, x0 + i * 2.0, x0 + 1.4 + i * 2.0, 0, 0.6, z0 - 2.9, z0 - 1.8, 0);
+    box(P, MAT.hedge, x0 + i * 2.0, x0 + 1.4 + i * 2.0, 0, 0.6, z1 + 1.8, z1 + 2.9, 0);
   }
-  /* --- 중심 잔디마당 + 정형 산책로 ---------------------------------------- */
-  slab(G, MAT.paving, 40, 92, 16.5, 19.5, 0.03, 1.5);            // 주 동선
-  slab(G, MAT.paving, 40, 92, -4.5, -1.5, 0.03, 1.5);
-  slab(G, MAT.paving, 44.5, 47.5, -4.5, 19.5, 0.03, 1.5);
-  slab(G, MAT.paving, 84, 87, -4.5, 19.5, 0.03, 1.5);
-  // 정형 헤지 (호텔형 대칭 식재)
-  for (let i = 0; i < 10; i++) {
-    box(G, MAT.hedge, 48 + i * 4.0, 50.6 + i * 4.0, 0, 0.7, 21.4, 24.0, 0);
-    box(G, MAT.hedge, 48 + i * 4.0, 50.6 + i * 4.0, 0, 0.7, -8.6, -6.0, 0);
-  }
-  /* --- 파고라 (연못 축 끝) ------------------------------------------------- */
+  slab(P, MAT.paving, 2.0, 34.0, 2.2, 4.2, 0.05, 1.5);            // 도로변 산책로
+  slab(P, MAT.paving, 2.0, 34.0, 13.4, 15.4, 0.05, 1.5);          // 내측 산책로
+  slab(P, MAT.paving, 2.0, 4.0, 4.2, 15.4, 0.05, 1.5);
+  slab(P, MAT.paving, 23.5, 25.5, 4.2, 15.4, 0.05, 1.5);
+
+  /* --- 파고라 (수경 축 끝) ------------------------------------------------- */
   const pg = new THREE.Group();
-  for (const dx of [-3.2, 3.2]) for (const dz of [-2.6, 2.6]) {
-    box(pg, MAT.wood, dx - 0.16, dx + 0.16, 0, 3.0, dz - 0.16, dz + 0.16, 0);
-  }
-  box(pg, MAT.wood, -3.6, 3.6, 3.0, 3.24, -3.0, -2.7, 0);
-  box(pg, MAT.wood, -3.6, 3.6, 3.0, 3.24, 2.7, 3.0, 0);
-  for (let i = 0; i <= 9; i++) box(pg, MAT.wood, -3.4 + i * 0.75, -3.1 + i * 0.75, 3.24, 3.4, -3.0, 3.0, 0);
-  box(pg, MAT.paving, -4.2, 4.2, -0.02, 0.06, -3.6, 3.6, 1.2);
-  pg.position.set(80.5, 0, 7.5); G.add(pg);
+  for (const dx of [-2.6, 2.6]) for (const dz of [-2.0, 2.0])
+    box(pg, MAT.wood, dx - 0.15, dx + 0.15, 0, 2.9, dz - 0.15, dz + 0.15, 0);
+  box(pg, MAT.wood, -3.0, 3.0, 2.9, 3.12, -2.4, -2.1, 0);
+  box(pg, MAT.wood, -3.0, 3.0, 2.9, 3.12, 2.1, 2.4, 0);
+  for (let i = 0; i <= 8; i++) box(pg, MAT.wood, -2.8 + i * 0.67, -2.54 + i * 0.67, 3.12, 3.28, -2.4, 2.4, 0);
+  box(pg, MAT.paving, -3.6, 3.6, -0.02, 0.06, -3.0, 3.0, 1.2);
+  pg.position.set(30.0, 0, 8.0); P.add(pg);
 
-  /* --- 수목 --------------------------------------------------------------- */
-  for (let i = 0; i < 8; i++) { tree(G, 46.5 + i * 5.6, -6.6, 6.5, i % 2); tree(G, 46.5 + i * 5.6, 22.0, 6.5, (i + 1) % 2); }
-  [[42, 8, 8, 2], [42, 15, 7, 0], [42, 1, 7.5, 2], [90, 4, 7, 1], [90, 13, 7.5, 0],
-   [77, -1.5, 5.5, 1], [77, 16.5, 5.5, 1], [55, 18.8, 5, 1], [66, -3.2, 5, 1]]
-    .forEach(([x, z, h, t]) => tree(G, x, z, h, t));
-  // 건물 주변·주차장 가로수
-  for (let i = 0; i < 7; i++) tree(G, -1 + i * 5.2, -27.6, 6.0, i % 3);
-  for (let i = 0; i < 6; i++) tree(G, -9.5, -20 + i * 8, 6.0, (i + 1) % 3);
-  for (let i = 0; i < 5; i++) tree(G, 37.5, -6 + i * 8, 6.0, i % 2);
-  for (let i = 0; i < 10; i++) tree(G, 18 + i * 14, -32.5, 6.5, i % 3);   // 도로변 가로수
-  for (let i = 0; i < 8; i++) tree(G, 20 + i * 16, -80.5, 6.0, (i + 2) % 3); // 강변 산책로변
-
+  /* --- 수목 (도로경계 정렬 대칭 식재) ------------------------------------- */
+  for (let i = 0; i < 4; i++) tree(P, 5.5 + i * 6.4, 0.6, 5.0, i % 2);      // 도로변 열식
+  for (let i = 0; i < 4; i++) tree(P, 6.0 + i * 5.6, 17.4, 5.4, (i + 1) % 2);
+  [[2.6, 12.0, 6.6, 2], [2.6, 6.5, 6.6, 2], [24.6, 12.2, 6.4, 2], [24.6, 6.5, 6.4, 2],
+   [33.0, 3.0, 6.0, 0], [33.5, 13.5, 6.0, 1], [13.0, 19.5, 5.6, 1], [21.0, 19.0, 5.6, 0]]
+    .forEach(([x, z, h, t]) => tree(P, x, z, h, t));
   return G;
 }
-
 /* =============================================================================
  *  씬 구성
  * ========================================================================== */
@@ -565,11 +678,11 @@ function buildScene(renderer) {
 /* --- 4방향 조감도 뷰 프리셋 ------------------------------------------------ */
 const TARGET = new THREE.Vector3(24, 4, 10);
 const VIEWS = {
-  front: { name: '정면(35M 도로측) 조감도', pos: [-12, 38, -100], target: [21, 9, 12] },
-  back:  { name: '배면 조감도',             pos: [56, 39, 121],   target: [21, 9, 12] },
-  left:  { name: '좌측면(정원측) 조감도',   pos: [144, 40, -22],  target: [32, 9, 11] },
-  right: { name: '우측면 조감도',           pos: [-95, 38, -25],  target: [16, 9, 11] },
-  top:   { name: '상부(배치) 조감도',       pos: [30, 262, 96],   target: [30, 0, -22] },
+  front: { name: '정면(35M 도로측) 조감도', pos: [-14, 40, -120], target: [19, 9, -4] },
+  back:  { name: '배면 조감도',             pos: [52, 41, 132],   target: [19, 9, 16] },
+  left:  { name: '좌측면 조감도',           pos: [142, 42, -22],  target: [26, 9, 8] },
+  right: { name: '우측면 조감도',           pos: [-100, 40, -28], target: [13, 9, 6] },
+  top:   { name: '상부(배치) 조감도',       pos: [26, 250, 104],  target: [26, 0, -16] },
 };
 
 if (typeof window !== 'undefined') { window.buildScene = buildScene; window.VIEWS = VIEWS; window.BSPEC = B; }
